@@ -1,0 +1,23 @@
+{
+  "name": "fx",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@effect/language-service": "^0.58.4",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@effect/experimental": "^0.57.10",
+    "@effect/platform": "^0.93.6",
+    "@effect/platform-node": "^0.103.0",
+    "effect": "^3.19.8"
+  },
+  "scripts": {
+    "prepare": "effect-language-service patch",
+    "test": "bun test"
+  }
+}
