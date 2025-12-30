@@ -1,10 +1,10 @@
 import { test, expect } from "bun:test"
 import { Effect } from "effect"
-import { extractSkyscannerData } from "./extract-skyscanner-data"
+import { extractSkyscannerData } from "./extract-data"
 
 test("extractSkyscannerData extracts correct data from HTML", async () => {
   // Read the HTML file
-  const htmlFile = Bun.file("skyscanner-get-sample.html")
+  const htmlFile = Bun.file("get-sample.html")
   const htmlString = await htmlFile.text()
 
   // Run the extraction function

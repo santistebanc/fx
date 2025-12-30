@@ -1,71 +1,12 @@
-import { Effect } from "effect"
+import { Effect, DateTime, Schema } from "effect"
 import * as cheerio from "cheerio"
 import { createHash } from "node:crypto"
-import { DateTime } from "effect"
+import { Deal, Flight, Leg, Trip } from "../deals-schemas"
 
 /**
- * Deal interface
+ * Result type containing arrays of deals, flights, legs, and trips
  */
-export interface Deal {
-  id: string // Generated as: `${tripId}_skyscanner_${provider}`
-  trip: string // Foreign key → trips.id
-  origin: string
-  destination: string
-  is_round: boolean
-  departure_date: string // ISO date string (YYYY-MM-DD)
-  departure_time: string // Time string (HH:MM)
-  return_date: string | null // ISO date string (YYYY-MM-DD) or null
-  return_time: string | null // Time string (HH:MM) or null
-  source: string
-  provider: string
-  price: number // float (real)
-  link: string
-  created_at: string // ISO timestamp string
-  updated_at: string // ISO timestamp string
-}
-
-/**
- * Flight interface
- */
-export interface Flight {
-  id: string // Generated as: `${flightNumber}_${origin}_${departureDate}_${departureTime}`
-  flight_number: string
-  airline: string
-  origin: string
-  destination: string
-  departure_date: string // ISO date string (YYYY-MM-DD)
-  departure_time: string // Time string (HH:MM)
-  arrival_date: string // ISO date string (YYYY-MM-DD)
-  arrival_time: string // Time string (HH:MM)
-  duration: number // smallint (minutes)
-  created_at: string // ISO timestamp string
-}
-
-/**
- * Leg interface
- */
-export interface Leg {
-  id: string // Generated as: `${tripId}_outbound_${flightId}` or `${tripId}_inbound_${flightId}`
-  trip: string // Foreign key → trips.id
-  flight: string // Foreign key → flights.id
-  inbound: boolean
-  order: number // Order within the trip (0-based)
-  connection_time: number | null // Minutes between flights, or null for last leg
-  created_at: string // ISO timestamp string
-}
-
-/**
- * Trip interface
- */
-export interface Trip {
-  id: string // Generated as: SHA-256 hash of sorted flight IDs joined by `|`
-  created_at: string // ISO timestamp string
-}
-
-/**
- * Extracted data from resultsHtml
- */
-export interface ExtractedDealsData {
+export interface ParsedDealsData {
   deals: Deal[]
   flights: Flight[]
   legs: Leg[]
@@ -132,15 +73,14 @@ const sha256 = (text: string): string => {
 }
 
 /**
- * Extracts deals, flights, legs, and trips from resultsHtml string
+ * Parses resultsHtml from PollData and returns deals, flights, legs, and trips
+ * 
+ * @param resultsHtml - HTML string from PollData.resultsHtml
+ * @returns An Effect that resolves to ParsedDealsData
  */
-export const extractDealsData = (
-  resultsHtml: string,
-  origin: string, // Origin airport code
-  destination: string, // Destination airport code
-  departureDate: string, // ISO date string (YYYY-MM-DD)
-  returnDate: string | null = null // ISO date string (YYYY-MM-DD) or null
-): Effect.Effect<ExtractedDealsData, Error> =>
+export const parseDealsFromHtml = (
+  resultsHtml: string
+): Effect.Effect<ParsedDealsData, Error> =>
   Effect.gen(function* () {
     const $ = cheerio.load(resultsHtml)
     const now = yield* DateTime.now
@@ -167,18 +107,37 @@ export const extractDealsData = (
       const link = listItem.find('a[href^="https://agw.skyscnr.com"]').first().attr("href") || ""
 
       // Extract outbound and return sections
+      // For finding headings (dates), use parent to get the container
       const outboundSection = $modal.find('p._heading:contains("Outbound")').parent()
       const returnSection = $modal.find('p._heading:contains("Return")').parent()
+      
+      // For finding panel bodies (flights), use the _panel div that follows the heading
+      const outboundHeading = $modal.find('p._heading:contains("Outbound")')
+      const outboundPanel = outboundHeading.length > 0 ? outboundHeading.next('._panel').first() : null
+      
+      const returnHeading = $modal.find('p._heading:contains("Return")')
+      const returnPanel = returnHeading.length > 0 ? returnHeading.next('._panel').first() : null
 
       // Extract outbound date
       const outboundDateText = outboundSection.find("p._heading").text()
-      const outboundDate = parseDate(outboundDateText) || departureDate
+      const outboundDate = parseDate(outboundDateText)
+      if (!outboundDate) {
+        return yield* Effect.fail(
+          new Error(`Could not parse outbound date from: ${outboundDateText}`)
+        )
+      }
 
       // Extract return date if exists
       let returnDateParsed: string | null = null
       if (returnSection.length > 0) {
-        const returnDateText = returnSection.find("p._heading").text()
-        returnDateParsed = parseDate(returnDateText) || returnDate
+        // Get the return heading directly from the modal (same approach as outbound)
+        const returnDateText = $modal.find('p._heading:contains("Return")').text()
+        returnDateParsed = parseDate(returnDateText)
+        if (!returnDateParsed) {
+          return yield* Effect.fail(
+            new Error(`Could not parse return date from: ${returnDateText}`)
+          )
+        }
       }
 
       // Extract provider from "Book Your Ticket" section
@@ -187,7 +146,9 @@ export const extractDealsData = (
 
       // Extract all flights from outbound
       const outboundFlights: Flight[] = []
-      const outboundPanels = outboundSection.find("._panel_body").toArray()
+      const outboundPanels = outboundPanel && outboundPanel.length > 0 
+        ? outboundPanel.find("._panel_body").toArray()
+        : outboundSection.find("._panel_body").toArray()
 
       for (const panel of outboundPanels) {
         const $panel = $(panel)
@@ -219,7 +180,7 @@ export const extractDealsData = (
 
         const flightId = `${flightNumber.replace(/\s+/g, "_")}_${originAirport}_${outboundDate}_${departureTime.replace(":", "-")}`
 
-        const flight: Flight = {
+        const flightData = {
           id: flightId,
           flight_number: flightNumber,
           airline,
@@ -233,6 +194,8 @@ export const extractDealsData = (
           created_at: nowIso,
         }
 
+        // Validate and decode flight using schema
+        const flight = yield* Schema.decodeUnknown(Flight)(flightData)
         flights.push(flight)
         outboundFlights.push(flight)
       }
@@ -240,7 +203,9 @@ export const extractDealsData = (
       // Extract all flights from return
       const returnFlights: Flight[] = []
       if (returnSection.length > 0) {
-        const returnPanels = returnSection.find("._panel_body").toArray()
+        const returnPanels = returnPanel && returnPanel.length > 0
+          ? returnPanel.find("._panel_body").toArray()
+          : returnSection.find("._panel_body").toArray()
 
         for (const panel of returnPanels) {
           const $panel = $(panel)
@@ -265,14 +230,14 @@ export const extractDealsData = (
 
           if (!departureTime || !arrivalTime || !originAirport || !destAirport) continue
 
-          const arrivalDate = returnDateParsed || returnDate || outboundDate
-          const flightDate = returnDateParsed || returnDate || outboundDate
+          const arrivalDate = returnDateParsed || outboundDate
+          const flightDate = returnDateParsed || outboundDate
 
           const duration = parseDuration(durationText)
 
           const flightId = `${flightNumber.replace(/\s+/g, "_")}_${originAirport}_${flightDate}_${departureTime.replace(":", "-")}`
 
-          const flight: Flight = {
+          const flightData = {
             id: flightId,
             flight_number: flightNumber,
             airline,
@@ -286,6 +251,8 @@ export const extractDealsData = (
             created_at: nowIso,
           }
 
+          // Validate and decode flight using schema
+          const flight = yield* Schema.decodeUnknown(Flight)(flightData)
           flights.push(flight)
           returnFlights.push(flight)
         }
@@ -296,10 +263,11 @@ export const extractDealsData = (
       const tripIdHash = sha256(allFlightIds.join("|"))
 
       // Create trip
-      const trip: Trip = {
+      const tripData = {
         id: tripIdHash,
         created_at: nowIso,
       }
+      const trip = yield* Schema.decodeUnknown(Trip)(tripData)
       trips.push(trip)
 
       // Create legs for outbound flights
@@ -310,11 +278,13 @@ export const extractDealsData = (
         const connectionTime =
           i < outboundFlights.length - 1
             ? parseConnectionTime(
-                outboundSection.find("._panel_body").eq(i).find(".connect_airport").text()
+                (outboundPanel && outboundPanel.length > 0
+                  ? outboundPanel
+                  : outboundSection).find("._panel_body").eq(i).find(".connect_airport").text()
               )
             : null
 
-        const leg: Leg = {
+        const legData = {
           id: `${tripIdHash}_outbound_${flight.id}`,
           trip: tripIdHash,
           flight: flight.id,
@@ -323,6 +293,7 @@ export const extractDealsData = (
           connection_time: connectionTime,
           created_at: nowIso,
         }
+        const leg = yield* Schema.decodeUnknown(Leg)(legData)
         legs.push(leg)
       }
 
@@ -334,11 +305,13 @@ export const extractDealsData = (
         const connectionTime =
           i < returnFlights.length - 1
             ? parseConnectionTime(
-                returnSection.find("._panel_body").eq(i).find(".connect_airport").text()
+                (returnPanel && returnPanel.length > 0
+                  ? returnPanel
+                  : returnSection).find("._panel_body").eq(i).find(".connect_airport").text()
               )
             : null
 
-        const leg: Leg = {
+        const legData = {
           id: `${tripIdHash}_inbound_${flight.id}`,
           trip: tripIdHash,
           flight: flight.id,
@@ -347,24 +320,40 @@ export const extractDealsData = (
           connection_time: connectionTime,
           created_at: nowIso,
         }
+        const leg = yield* Schema.decodeUnknown(Leg)(legData)
         legs.push(leg)
       }
 
-      // Get first outbound flight for departure time
+      // Get first outbound flight for departure time and origin/destination
       const firstOutboundFlight = outboundFlights[0]
-      const lastReturnFlight = returnFlights.length > 0 ? returnFlights[returnFlights.length - 1] : null
+      const firstReturnFlight = returnFlights.length > 0 ? returnFlights[0] : null
+
+      if (!firstOutboundFlight) {
+        return yield* Effect.fail(new Error("No outbound flights found in modal"))
+      }
+
+      // Extract origin from first outbound flight
+      const origin = firstOutboundFlight.origin
+      
+      // Extract destination: prefer last outbound flight's destination, 
+      // but also try to extract from list-item summary as it shows the final destination
+      const lastOutboundFlight = outboundFlights[outboundFlights.length - 1]
+      const destinationFromFlights = lastOutboundFlight?.destination || firstOutboundFlight.destination
+      
+      // Try to get destination from list-item summary (more reliable for final destination)
+      const outboundSummary = listItem.find(".item").first().find(".stops p").last().find("span").last().text().trim()
+      const destination = outboundSummary || destinationFromFlights
 
       // Create deal
-      const deal: Deal = {
+      const dealData = {
         id: `${tripIdHash}_skyscanner_${providerName.replace(/\s+/g, "_")}`,
         trip: tripIdHash,
         origin,
         destination,
-        is_round: returnFlights.length > 0,
         departure_date: outboundDate,
-        departure_time: firstOutboundFlight?.departure_time || "",
+        departure_time: firstOutboundFlight.departure_time,
         return_date: returnDateParsed,
-        return_time: lastReturnFlight?.arrival_time || null,
+        return_time: firstReturnFlight?.departure_time || null,
         source: "skyscanner",
         provider: providerName,
         price,
@@ -372,6 +361,9 @@ export const extractDealsData = (
         created_at: nowIso,
         updated_at: nowIso,
       }
+
+      // Validate and decode deal using schema
+      const deal = yield* Schema.decodeUnknown(Deal)(dealData)
       deals.push(deal)
     }
 

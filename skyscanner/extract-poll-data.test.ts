@@ -4,7 +4,7 @@ import { extractPollData } from "./extract-poll-data"
 
 test("extractPollData extracts correct data from poll-0 sample", async () => {
   // Read the poll-0 HTML file
-  const pollFile = Bun.file("skyscanner-poll-0-sample.html")
+  const pollFile = Bun.file("poll-0-sample.html")
   const pollString = await pollFile.text()
 
   // Run the extraction function
@@ -19,7 +19,7 @@ test("extractPollData extracts correct data from poll-0 sample", async () => {
 
 test("extractPollData extracts correct data from poll-1 sample", async () => {
   // Read the poll-1 HTML file
-  const pollFile = Bun.file("skyscanner-poll-1-sample.html")
+  const pollFile = Bun.file("poll-1-sample.html")
   const pollString = await pollFile.text()
 
   // Run the extraction function
