@@ -1,7 +1,7 @@
 import { Effect, DateTime, Schema } from "effect"
 import * as cheerio from "cheerio"
 import { createHash } from "node:crypto"
-import { Deal, Flight, Leg, Trip } from "../deals-schemas"
+import { Deal, Flight, Leg, Trip } from "../schemas"
 
 /**
  * Result type containing arrays of deals, flights, legs, and trips
@@ -374,4 +374,3 @@ export const parseDealsFromHtml = (
       trips,
     }
   })
-

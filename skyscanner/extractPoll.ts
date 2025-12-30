@@ -59,4 +59,3 @@ export const extractPollData = (pollString: string): Effect.Effect<PollData, Err
       resultsHtml,
     }
   })
-

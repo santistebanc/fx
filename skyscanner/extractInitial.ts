@@ -7,7 +7,7 @@ import { DateTime, Effect } from "effect"
  * @param htmlString - The HTML string to parse
  * @returns An Effect that resolves to the extracted SkyscannerData object
  */
-export const extractSkyscannerData = (htmlString: string) =>
+export const extractInitialData = (htmlString: string) =>
   Effect.gen(function* () {
     // Find the data object in the JavaScript code
     // Look for the pattern: data: { ... } that contains '_token'

@@ -264,4 +264,3 @@ export class Trip extends Schema.Class<Trip>("Trip")({
  * The Trip class itself can be used as a schema
  */
 export const TripSchema = Trip
-

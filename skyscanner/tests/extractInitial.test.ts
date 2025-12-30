@@ -1,14 +1,14 @@
 import { test, expect } from "bun:test"
 import { Effect } from "effect"
-import { extractSkyscannerData } from "./extract-data"
+import { extractInitialData } from "../extractInitial"
 
-test("extractSkyscannerData extracts correct data from HTML", async () => {
+test("extractInitialData extracts correct data from HTML", async () => {
   // Read the HTML file
-  const htmlFile = Bun.file("get-sample.html")
+  const htmlFile = Bun.file("../samples/initial.html")
   const htmlString = await htmlFile.text()
 
   // Run the extraction function
-  const result = await Effect.runPromise(extractSkyscannerData(htmlString))
+  const result = await Effect.runPromise(extractInitialData(htmlString))
 
   // Expected values from the HTML file (lines 777-788)
   const expected = {
@@ -41,4 +41,3 @@ test("extractSkyscannerData extracts correct data from HTML", async () => {
   expect(result.noc).toMatch(/^\d+$/) // Should be numeric string
   expect(Number(result.noc)).toBeGreaterThan(0) // Should be a positive number
 })
-

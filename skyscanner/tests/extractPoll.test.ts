@@ -1,10 +1,10 @@
 import { test, expect } from "bun:test"
 import { Effect } from "effect"
-import { extractPollData } from "./extract-poll-data"
+import { extractPollData } from "../extractPoll"
 
 test("extractPollData extracts correct data from poll-0 sample", async () => {
   // Read the poll-0 HTML file
-  const pollFile = Bun.file("poll-0-sample.html")
+  const pollFile = Bun.file("../samples/poll-0.html")
   const pollString = await pollFile.text()
 
   // Run the extraction function
@@ -19,7 +19,7 @@ test("extractPollData extracts correct data from poll-0 sample", async () => {
 
 test("extractPollData extracts correct data from poll-1 sample", async () => {
   // Read the poll-1 HTML file
-  const pollFile = Bun.file("poll-1-sample.html")
+  const pollFile = Bun.file("../samples/poll-1.html")
   const pollString = await pollFile.text()
 
   // Run the extraction function
@@ -31,4 +31,3 @@ test("extractPollData extracts correct data from poll-1 sample", async () => {
   expect(typeof result.resultsHtml).toBe("string")
   expect(result.resultsHtml.length).toBeGreaterThan(0)
 })
-
