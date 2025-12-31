@@ -1,4 +1,23 @@
-import { DateTime, Effect } from "effect"
+import { DateTime, Effect, Data } from "effect"
+
+export class ExtractInitialDataError extends Data.TaggedError("ExtractInitialDataError")<{
+  readonly cause: unknown
+  readonly html: string
+  readonly message: string
+}> {}
+
+export type InitialData = {
+  _token: string
+  session: string
+  suuid: string
+  noc: string
+  deeplink: string
+  s: string
+  adults: string
+  children: string
+  infants: string
+  currency: string
+}
 
 /**
  * Extracts the Skyscanner data object from an HTML string.
@@ -9,16 +28,17 @@ import { DateTime, Effect } from "effect"
  */
 export const extractInitialData = (htmlString: string) =>
   Effect.gen(function* () {
-    // Find the data object in the JavaScript code
-    // Look for the pattern: data: { ... } that contains '_token'
-    // Use a more flexible regex that handles multi-line content
     const dataObjectRegex = /data:\s*\{[\s\S]*?'_token'[\s\S]*?\}/m
 
     const match = htmlString.match(dataObjectRegex)
 
     if (!match) {
       return yield* Effect.fail(
-        new Error("Could not find data object in HTML string")
+        new ExtractInitialDataError({
+          cause: "Could not find data object in HTML string",
+          html: htmlString,
+          message: "Failed to extract initial data: Could not find data object in HTML string",
+        })
       )
     }
 
@@ -51,11 +71,8 @@ export const extractInitialData = (htmlString: string) =>
     }
   })
 
-// Extract individual fields using regex
 const fieldExtractor = (dataObjectString: string) => (fieldName: string) =>
   Effect.gen(function* () {
-    // Match: 'fieldName': 'value'
-    // The value can contain escaped quotes, so we match until we find a non-escaped closing quote
     const regex = new RegExp(
       `'${fieldName}'\\s*:\\s*'((?:[^']|\\\\')*)'`,
       "s"
@@ -65,5 +82,11 @@ const fieldExtractor = (dataObjectString: string) => (fieldName: string) =>
       return yield* Effect.succeed(fieldMatch[1])
     }
 
-    return yield* Effect.fail(new Error(`Could not extract '${fieldName}' field`))
+    return yield* Effect.fail(
+      new ExtractInitialDataError({
+        cause: `Could not extract '${fieldName}' field`,
+        html: dataObjectString,
+        message: `Failed to extract initial data: Could not extract '${fieldName}' field`,
+      })
+    )
   })

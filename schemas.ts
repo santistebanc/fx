@@ -62,6 +62,8 @@ export const SearchInputSchema = Schema.Struct({
   returnDate: Schema.optional(IsoDateSchema), // ISO date string (YYYY-MM-DD) - optional
 })
 
+export type SearchInput = Schema.Schema.Type<typeof SearchInputSchema>
+
 /**
  * Deal class
  */

@@ -1,14 +1,11 @@
-import { Effect, DateTime, Schema, Data } from "effect"
+import { Effect, DateTime, Schema } from "effect"
 import * as cheerio from "cheerio"
 import { createHash } from "node:crypto"
 import { Deal, Flight, Leg, Trip } from "../schemas"
 
-export class ParseHtmlError extends Data.TaggedError("ParseHtmlError")<{
-  readonly cause: unknown
-  readonly html: string
-  readonly message: string
-}> {}
-
+/**
+ * Result type containing arrays of deals, flights, legs, and trips
+ */
 export interface ParsedDealsData {
   deals: Deal[]
   flights: Flight[]
@@ -58,7 +55,7 @@ const parseDuration = (durationText: string): number => {
 }
 
 /**
- * Helper function to parse connection time from text like "2h 20 Connect in airport"
+ * Helper function to parse connection time from text like "11h 05 Connection"
  */
 const parseConnectionTime = (text: string): number | null => {
   const match = text.match(/(\d+)h\s*(\d+)?/)
@@ -68,6 +65,9 @@ const parseConnectionTime = (text: string): number | null => {
   return hours * 60 + minutes
 }
 
+/**
+ * Helper function to generate SHA-256 hash
+ */
 const sha256 = (text: string): string => {
   return createHash("sha256").update(text).digest("hex")
 }
@@ -80,7 +80,7 @@ const sha256 = (text: string): string => {
  */
 export const parseDealsFromHtml = (
   resultsHtml: string
-): Effect.Effect<ParsedDealsData, ParseHtmlError> =>
+): Effect.Effect<ParsedDealsData, Error> =>
   Effect.gen(function* () {
     const $ = cheerio.load(resultsHtml)
     const now = yield* DateTime.now
@@ -104,7 +104,7 @@ export const parseDealsFromHtml = (
       const priceMatch = priceText.match(/€(\d+)/)
       const price = priceMatch && priceMatch[1] ? Number.parseFloat(priceMatch[1]) * 100 : 0 // Convert to cents
 
-      const link = listItem.find('a[href^="https://agw.skyscnr.com"]').first().attr("href") || ""
+      const link = listItem.find('a[href^="https://www.kiwi.com/deep"]').first().attr("href") || ""
 
       // Extract outbound and return sections
       // For finding headings (dates), use parent to get the container
@@ -123,11 +123,7 @@ export const parseDealsFromHtml = (
       const outboundDate = parseDate(outboundDateText)
       if (!outboundDate) {
         return yield* Effect.fail(
-          new ParseHtmlError({
-            cause: `Could not parse outbound date from: ${outboundDateText}`,
-            html: resultsHtml,
-            message: `Failed to parse HTML: Could not parse outbound date from: ${outboundDateText}`,
-          })
+          new Error(`Could not parse outbound date from: ${outboundDateText}`)
         )
       }
 
@@ -139,18 +135,14 @@ export const parseDealsFromHtml = (
         returnDateParsed = parseDate(returnDateText)
         if (!returnDateParsed) {
           return yield* Effect.fail(
-            new ParseHtmlError({
-              cause: `Could not parse return date from: ${returnDateText}`,
-              html: resultsHtml,
-              message: `Failed to parse HTML: Could not parse return date from: ${returnDateText}`,
-            })
+            new Error(`Could not parse return date from: ${returnDateText}`)
           )
         }
       }
 
-      // Extract provider from "Book Your Ticket" section
+      // Extract provider from "Book Your Ticket" section (Kiwi always uses "Kiwi.com")
       const providerSection = $modal.find('p._heading:contains("Book Your Ticket")').parent()
-      const providerName = providerSection.find("._similar > div > p").first().text().trim() || "Unknown"
+      const providerName = providerSection.find("._similar > div > p").first().text().trim() || "Kiwi.com"
 
       // Extract all flights from outbound
       const outboundFlights: Flight[] = []
@@ -161,13 +153,13 @@ export const parseDealsFromHtml = (
       for (const panel of outboundPanels) {
         const $panel = $(panel)
         const flightNumberText = $panel.find("._head small").text().trim()
-        // Skyscanner format: "KLM KL1770" - extract airline and flight number
-        // Last word is the flight_number, rest is the airline
+        // Kiwi format: "Wizz Air Malta W4 3171" - extract airline and flight number
+        // Last two words make up the flight_number (joined without space), rest is airline
         const words = flightNumberText.split(/\s+/)
-        if (words.length < 2) continue // Need at least airline + flight number
+        if (words.length < 3) continue // Need at least airline name + code + number
 
-        const flightNumber = words[words.length - 1] || "" // Last word: "KL1770"
-        const airline = words.slice(0, -1).join(" ") // All other words: "KLM"
+        const flightNumber = words.slice(-2).join("") // Last two words joined: "W43171"
+        const airline = words.slice(0, -2).join(" ") // All other words: "Wizz Air Malta"
 
         const $item = $panel.find("._item")
         const times = $item.find(".c3 p").toArray().map((el) => $(el).text().trim())
@@ -205,16 +197,7 @@ export const parseDealsFromHtml = (
         }
 
         // Validate and decode flight using schema
-        const flight = yield* Schema.decodeUnknown(Flight)(flightData).pipe(
-          Effect.mapError(
-            (error) =>
-              new ParseHtmlError({
-                cause: error,
-                html: resultsHtml,
-                message: `Failed to parse HTML: ${error instanceof Error ? error.message : String(error)}`,
-              })
-          )
-        )
+        const flight = yield* Schema.decodeUnknown(Flight)(flightData)
         flights.push(flight)
         outboundFlights.push(flight)
       }
@@ -229,13 +212,13 @@ export const parseDealsFromHtml = (
         for (const panel of returnPanels) {
           const $panel = $(panel)
           const flightNumberText = $panel.find("._head small").text().trim()
-          // Skyscanner format: "KLM KL1770" - extract airline and flight number
-          // Last word is the flight_number, rest is the airline
+          // Kiwi format: "Wizz Air Malta W4 3171" - extract airline and flight number
+          // Last two words make up the flight_number (joined without space), rest is airline
           const words = flightNumberText.split(/\s+/)
-          if (words.length < 2) continue // Need at least airline + flight number
+          if (words.length < 3) continue // Need at least airline name + code + number
 
-          const flightNumber = words[words.length - 1] || "" // Last word: "KL1770"
-          const airline = words.slice(0, -1).join(" ") // All other words: "KLM"
+          const flightNumber = words.slice(-2).join("") // Last two words joined: "W43171"
+          const airline = words.slice(0, -2).join(" ") // All other words: "Wizz Air Malta"
 
           const $item = $panel.find("._item")
           const times = $item.find(".c3 p").toArray().map((el) => $(el).text().trim())
@@ -273,16 +256,7 @@ export const parseDealsFromHtml = (
           }
 
           // Validate and decode flight using schema
-          const flight = yield* Schema.decodeUnknown(Flight)(flightData).pipe(
-            Effect.mapError(
-              (error) =>
-                new ParseHtmlError({
-                  cause: error,
-                  html: resultsHtml,
-                  message: `Failed to parse HTML: ${error instanceof Error ? error.message : String(error)}`,
-                })
-            )
-          )
+          const flight = yield* Schema.decodeUnknown(Flight)(flightData)
           flights.push(flight)
           returnFlights.push(flight)
         }
@@ -297,16 +271,7 @@ export const parseDealsFromHtml = (
         id: tripIdHash,
         created_at: nowIso,
       }
-      const trip = yield* Schema.decodeUnknown(Trip)(tripData).pipe(
-        Effect.mapError(
-          (error) =>
-            new ParseHtmlError({
-              cause: error,
-              html: resultsHtml,
-              message: `Failed to parse HTML: ${error instanceof Error ? error.message : String(error)}`,
-            })
-        )
-      )
+      const trip = yield* Schema.decodeUnknown(Trip)(tripData)
       trips.push(trip)
 
       // Create legs for outbound flights
@@ -332,16 +297,7 @@ export const parseDealsFromHtml = (
           connection_time: connectionTime,
           created_at: nowIso,
         }
-        const leg = yield* Schema.decodeUnknown(Leg)(legData).pipe(
-          Effect.mapError(
-            (error) =>
-              new ParseHtmlError({
-                cause: error,
-                html: resultsHtml,
-                message: `Failed to parse HTML: ${error instanceof Error ? error.message : String(error)}`,
-              })
-          )
-        )
+        const leg = yield* Schema.decodeUnknown(Leg)(legData)
         legs.push(leg)
       }
 
@@ -368,16 +324,7 @@ export const parseDealsFromHtml = (
           connection_time: connectionTime,
           created_at: nowIso,
         }
-        const leg = yield* Schema.decodeUnknown(Leg)(legData).pipe(
-          Effect.mapError(
-            (error) =>
-              new ParseHtmlError({
-                cause: error,
-                html: resultsHtml,
-                message: `Failed to parse HTML: ${error instanceof Error ? error.message : String(error)}`,
-              })
-          )
-        )
+        const leg = yield* Schema.decodeUnknown(Leg)(legData)
         legs.push(leg)
       }
 
@@ -386,13 +333,7 @@ export const parseDealsFromHtml = (
       const firstReturnFlight = returnFlights.length > 0 ? returnFlights[0] : null
 
       if (!firstOutboundFlight) {
-        return yield* Effect.fail(
-          new ParseHtmlError({
-            cause: "No outbound flights found in modal",
-            html: resultsHtml,
-            message: "Failed to parse HTML: No outbound flights found in modal",
-          })
-        )
+        return yield* Effect.fail(new Error("No outbound flights found in modal"))
       }
 
       // Extract origin from first outbound flight
@@ -409,7 +350,7 @@ export const parseDealsFromHtml = (
 
       // Create deal
       const dealData = {
-        id: `${tripIdHash}_skyscanner_${providerName.replace(/\s+/g, "_")}`,
+        id: `${tripIdHash}_kiwi_${providerName.replace(/\s+/g, "_")}`,
         trip: tripIdHash,
         origin,
         destination,
@@ -417,7 +358,7 @@ export const parseDealsFromHtml = (
         departure_time: firstOutboundFlight.departure_time,
         return_date: returnDateParsed,
         return_time: firstReturnFlight?.departure_time || null,
-        source: "skyscanner",
+        source: "kiwi",
         provider: providerName,
         price,
         link,
@@ -426,16 +367,7 @@ export const parseDealsFromHtml = (
       }
 
       // Validate and decode deal using schema
-      const deal = yield* Schema.decodeUnknown(Deal)(dealData).pipe(
-        Effect.mapError(
-          (error) =>
-            new ParseHtmlError({
-              cause: error,
-              html: resultsHtml,
-              message: `Failed to parse HTML: ${error instanceof Error ? error.message : String(error)}`,
-            })
-        )
-      )
+      const deal = yield* Schema.decodeUnknown(Deal)(dealData)
       deals.push(deal)
     }
 

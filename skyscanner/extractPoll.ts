@@ -1,8 +1,10 @@
-import { Effect } from "effect"
+import { Effect, Data } from "effect"
 
-/**
- * Type definition for the extracted poll data
- */
+export class ReadResponseError extends Data.TaggedError("ReadResponseError")<{
+  readonly cause: unknown
+  readonly message: string
+}> {}
+
 export interface PollData {
   finished: boolean
   count: number
@@ -16,41 +18,62 @@ export interface PollData {
  * @param pollString - The pipe-delimited string to parse
  * @returns An Effect that resolves to the extracted PollData object
  */
-export const extractPollData = (pollString: string): Effect.Effect<PollData, Error> =>
+export const extractPollData = (pollString: string): Effect.Effect<PollData, ReadResponseError> =>
   Effect.gen(function* () {
     const parts = pollString.split("|")
 
     if (parts.length < 7) {
+      const message = `Expected at least 7 pipe-delimited parts, got ${parts.length}`
       return yield* Effect.fail(
-        new Error(`Expected at least 7 pipe-delimited parts, got ${parts.length}`)
+        new ReadResponseError({
+          cause: message,
+          message: `Failed to read response: ${message}`,
+        })
       )
     }
 
-    // First item: 'N' or 'Y' -> boolean 'finished'
     const finishedStr = parts[0]?.trim()
     if (finishedStr !== "N" && finishedStr !== "Y") {
+      const message = `Expected first item to be 'N' or 'Y', got '${finishedStr}'`
       return yield* Effect.fail(
-        new Error(`Expected first item to be 'N' or 'Y', got '${finishedStr}'`)
+        new ReadResponseError({
+          cause: message,
+          message: `Failed to read response: ${message}`,
+        })
       )
     }
     const finished = finishedStr === "Y"
 
-    // Second item: number -> 'count'
     const countStr = parts[1]?.trim()
     if (!countStr) {
-      return yield* Effect.fail(new Error("Second item (count) is missing or empty"))
+      const message = "Second item (count) is missing or empty"
+      return yield* Effect.fail(
+        new ReadResponseError({
+          cause: message,
+          message: `Failed to read response: ${message}`,
+        })
+      )
     }
     const count = Number.parseInt(countStr, 10)
     if (Number.isNaN(count)) {
+      const message = `Second item (count) is not a valid number: '${countStr}'`
       return yield* Effect.fail(
-        new Error(`Second item (count) is not a valid number: '${countStr}'`)
+        new ReadResponseError({
+          cause: message,
+          message: `Failed to read response: ${message}`,
+        })
       )
     }
 
-    // Seventh item (index 6): HTML string -> 'resultsHtml'
     const resultsHtml = parts[6]?.trim() ?? ""
     if (!resultsHtml) {
-      return yield* Effect.fail(new Error("Seventh item (resultsHtml) is missing or empty"))
+      const message = "Seventh item (resultsHtml) is missing or empty"
+      return yield* Effect.fail(
+        new ReadResponseError({
+          cause: message,
+          message: `Failed to read response: ${message}`,
+        })
+      )
     }
 
     return {
