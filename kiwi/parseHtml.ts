@@ -1,17 +1,14 @@
-import { Effect, DateTime, Schema } from "effect"
+import { Effect, DateTime, Schema, Data } from "effect"
 import * as cheerio from "cheerio"
 import { createHash } from "node:crypto"
-import { Deal, Flight, Leg, Trip } from "../schemas"
+import { Deal, Flight, Leg, Trip, type ParsedDealsData } from "../schemas"
 
-/**
- * Result type containing arrays of deals, flights, legs, and trips
- */
-export interface ParsedDealsData {
-  deals: Deal[]
-  flights: Flight[]
-  legs: Leg[]
-  trips: Trip[]
-}
+export class ParseHtmlError extends Data.TaggedError("ParseHtmlError")<{
+  readonly cause: unknown
+  readonly html: string
+  readonly message: string
+}> {}
+
 
 /**
  * Helper function to parse date from text like "Sun, 1 Feb 2026"
@@ -80,7 +77,7 @@ const sha256 = (text: string): string => {
  */
 export const parseDealsFromHtml = (
   resultsHtml: string
-): Effect.Effect<ParsedDealsData, Error> =>
+): Effect.Effect<ParsedDealsData, ParseHtmlError> =>
   Effect.gen(function* () {
     const $ = cheerio.load(resultsHtml)
     const now = yield* DateTime.now
@@ -123,7 +120,11 @@ export const parseDealsFromHtml = (
       const outboundDate = parseDate(outboundDateText)
       if (!outboundDate) {
         return yield* Effect.fail(
-          new Error(`Could not parse outbound date from: ${outboundDateText}`)
+          new ParseHtmlError({
+            cause: new Error(`Could not parse outbound date from: ${outboundDateText}`),
+            html: resultsHtml,
+            message: `Could not parse outbound date from: ${outboundDateText}`,
+          })
         )
       }
 
@@ -135,7 +136,11 @@ export const parseDealsFromHtml = (
         returnDateParsed = parseDate(returnDateText)
         if (!returnDateParsed) {
           return yield* Effect.fail(
-            new Error(`Could not parse return date from: ${returnDateText}`)
+            new ParseHtmlError({
+              cause: new Error(`Could not parse return date from: ${returnDateText}`),
+              html: resultsHtml,
+              message: `Could not parse return date from: ${returnDateText}`,
+            })
           )
         }
       }
@@ -197,7 +202,16 @@ export const parseDealsFromHtml = (
         }
 
         // Validate and decode flight using schema
-        const flight = yield* Schema.decodeUnknown(Flight)(flightData)
+        const flight = yield* Schema.decodeUnknown(Flight)(flightData).pipe(
+          Effect.mapError(
+            (error) =>
+              new ParseHtmlError({
+                cause: error,
+                html: resultsHtml,
+                message: `Failed to decode flight: ${error instanceof Error ? error.message : String(error)}`,
+              })
+          )
+        )
         flights.push(flight)
         outboundFlights.push(flight)
       }
@@ -256,7 +270,16 @@ export const parseDealsFromHtml = (
           }
 
           // Validate and decode flight using schema
-          const flight = yield* Schema.decodeUnknown(Flight)(flightData)
+          const flight = yield* Schema.decodeUnknown(Flight)(flightData).pipe(
+          Effect.mapError(
+            (error) =>
+              new ParseHtmlError({
+                cause: error,
+                html: resultsHtml,
+                message: `Failed to decode flight: ${error instanceof Error ? error.message : String(error)}`,
+              })
+          )
+        )
           flights.push(flight)
           returnFlights.push(flight)
         }
@@ -271,7 +294,16 @@ export const parseDealsFromHtml = (
         id: tripIdHash,
         created_at: nowIso,
       }
-      const trip = yield* Schema.decodeUnknown(Trip)(tripData)
+      const trip = yield* Schema.decodeUnknown(Trip)(tripData).pipe(
+        Effect.mapError(
+          (error) =>
+            new ParseHtmlError({
+              cause: error,
+              html: resultsHtml,
+              message: `Failed to decode trip: ${error instanceof Error ? error.message : String(error)}`,
+            })
+        )
+      )
       trips.push(trip)
 
       // Create legs for outbound flights
@@ -297,7 +329,16 @@ export const parseDealsFromHtml = (
           connection_time: connectionTime,
           created_at: nowIso,
         }
-        const leg = yield* Schema.decodeUnknown(Leg)(legData)
+        const leg = yield* Schema.decodeUnknown(Leg)(legData).pipe(
+          Effect.mapError(
+            (error) =>
+              new ParseHtmlError({
+                cause: error,
+                html: resultsHtml,
+                message: `Failed to decode leg: ${error instanceof Error ? error.message : String(error)}`,
+              })
+          )
+        )
         legs.push(leg)
       }
 
@@ -324,7 +365,16 @@ export const parseDealsFromHtml = (
           connection_time: connectionTime,
           created_at: nowIso,
         }
-        const leg = yield* Schema.decodeUnknown(Leg)(legData)
+        const leg = yield* Schema.decodeUnknown(Leg)(legData).pipe(
+          Effect.mapError(
+            (error) =>
+              new ParseHtmlError({
+                cause: error,
+                html: resultsHtml,
+                message: `Failed to decode leg: ${error instanceof Error ? error.message : String(error)}`,
+              })
+          )
+        )
         legs.push(leg)
       }
 
@@ -333,7 +383,13 @@ export const parseDealsFromHtml = (
       const firstReturnFlight = returnFlights.length > 0 ? returnFlights[0] : null
 
       if (!firstOutboundFlight) {
-        return yield* Effect.fail(new Error("No outbound flights found in modal"))
+        return yield* Effect.fail(
+          new ParseHtmlError({
+            cause: new Error("No outbound flights found in modal"),
+            html: resultsHtml,
+            message: "No outbound flights found in modal",
+          })
+        )
       }
 
       // Extract origin from first outbound flight
@@ -367,7 +423,16 @@ export const parseDealsFromHtml = (
       }
 
       // Validate and decode deal using schema
-      const deal = yield* Schema.decodeUnknown(Deal)(dealData)
+      const deal = yield* Schema.decodeUnknown(Deal)(dealData).pipe(
+        Effect.mapError(
+          (error) =>
+            new ParseHtmlError({
+              cause: error,
+              html: resultsHtml,
+              message: `Failed to decode deal: ${error instanceof Error ? error.message : String(error)}`,
+            })
+        )
+      )
       deals.push(deal)
     }
 

@@ -65,6 +65,32 @@ export const SearchInputSchema = Schema.Struct({
 export type SearchInput = Schema.Schema.Type<typeof SearchInputSchema>
 
 /**
+ * Result type containing arrays of deals, flights, legs, and trips
+ */
+export interface ParsedDealsData {
+  deals: Deal[]
+  flights: Flight[]
+  legs: Leg[]
+  trips: Trip[]
+}
+
+/**
+ * Search result containing parsed data and metadata
+ */
+export interface SearchResult {
+  data: ParsedDealsData
+  metadata: {
+    numberOfDeals: number
+    numberOfFlights: number
+    numberOfLegs: number
+    numberOfTrips: number
+    pollRetries: number
+    errors: string[]
+    timeSpentMs: number
+  }
+}
+
+/**
  * Deal class
  */
 export class Deal extends Schema.Class<Deal>("Deal")({

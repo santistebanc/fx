@@ -1,30 +1,28 @@
-import { HttpRouter, HttpServer, HttpServerResponse } from "@effect/platform"
+import { HttpRouter, HttpServer } from "@effect/platform"
 import { NodeHttpServer, NodeRuntime } from "@effect/platform-node"
-import { DateTime, Effect, Layer } from "effect"
+import { Effect, Layer } from "effect"
 import { createServer } from "node:http"
+import { initialHandler as skyscannerInitialHandler, pollHandler as skyscannerPollHandler } from "./skyscanner/fakeServer"
+import { initialHandler as kiwiInitialHandler, pollHandler as kiwiPollHandler } from "./kiwi/fakeServer"
 
-// Define a handler that uses Effect to get the current time
-const handler = Effect.gen(function* () {
-  const now = yield* DateTime.now
-  return yield* HttpServerResponse.json({
-    message: "Hello from Effect!",
-    timestamp: DateTime.formatIso(now),
-    status: "ok",
-  })
-})
-
-// Build the router with the Effect handler
 const router = HttpRouter.empty.pipe(
-  HttpRouter.get("/", handler)
+  HttpRouter.get("/portal/sky", skyscannerInitialHandler),
+  HttpRouter.post("/portal/sky/poll", skyscannerPollHandler),
+  HttpRouter.get("/portal/kiwi", kiwiInitialHandler),
+  HttpRouter.post("/portal/kiwi/poll", kiwiPollHandler)
 )
 
-// Create the HTTP server layer
 const HttpLive = HttpServer.serve(router).pipe(
   Layer.provide(NodeHttpServer.layer(createServer, { port: 3000 }))
 )
 
-// Run the server
 Effect.gen(function* () {
   yield* Effect.log("Server running on http://localhost:3000")
+  yield* Effect.log("Skyscanner endpoints:")
+  yield* Effect.log("  GET  http://localhost:3000/portal/sky")
+  yield* Effect.log("  POST http://localhost:3000/portal/sky/poll")
+  yield* Effect.log("Kiwi endpoints:")
+  yield* Effect.log("  GET  http://localhost:3000/portal/kiwi")
+  yield* Effect.log("  POST http://localhost:3000/portal/kiwi/poll")
   return yield* Layer.launch(HttpLive)
 }).pipe(NodeRuntime.runMain)

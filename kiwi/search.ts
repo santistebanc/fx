@@ -1,60 +1,23 @@
-import { Effect, Duration, DateTime, Data } from "effect"
+import { Effect, DateTime, Data } from "effect"
 import { HttpClient } from "@effect/platform"
 import { type SearchInput, type SearchResult } from "../schemas"
 import { buildSearchUrl } from "./buildUrl"
 import { extractInitialData, type InitialData, ExtractInitialDataError } from "./extractInitial"
-import { type PollData } from "./extractPoll"
 import { parseDealsFromHtml, ParseHtmlError } from "./parseHtml"
 import { makeInitialRequest, makePollRequest, InitialRequestError, PollRequestError } from "./requests"
-import { SkyscannerConfig } from "./config"
+import { KiwiConfig } from "./config"
 
 export class PollMaxRetriesError extends Data.TaggedError("PollMaxRetriesError")<{
   readonly maxRetries: number
   readonly message: string
 }> { }
 
-const pollUntilFinished = (
-  initialData: InitialData,
-  cookies: string,
-  searchUrl: string,
-  maxRetries: number = 20
-): Effect.Effect<
-  { pollData: PollData; cookies: string; retries: number },
-  PollRequestError | PollMaxRetriesError,
-  HttpClient.HttpClient | SkyscannerConfig
-> =>
-  Effect.gen(function* () {
-    let currentCookies = cookies
-    let retries = 0
-    let pollData: PollData | null = null
-
-    while (retries < maxRetries) {
-      const result = yield* makePollRequest(initialData, currentCookies, searchUrl, retries + 1)
-      pollData = result.pollData
-      currentCookies = result.cookies
-
-      if (pollData.finished) {
-        return { pollData, cookies: currentCookies, retries }
-      }
-
-      yield* Effect.sleep(Duration.seconds(1))
-      retries++
-    }
-
-    return yield* Effect.fail(
-      new PollMaxRetriesError({
-        maxRetries,
-        message: `Max poll retries (${maxRetries}) reached without getting finished=true`,
-      })
-    )
-  })
-
 export const search = (
   searchInput: SearchInput
 ): Effect.Effect<
   SearchResult,
   InitialRequestError | ExtractInitialDataError | PollRequestError | PollMaxRetriesError | ParseHtmlError,
-  HttpClient.HttpClient | SkyscannerConfig
+  HttpClient.HttpClient | KiwiConfig
 > =>
   Effect.gen(function* () {
     const startTime = yield* DateTime.now
@@ -62,7 +25,8 @@ export const search = (
     const searchUrl = yield* buildSearchUrl(searchInput)
     const initialRequestResult = yield* makeInitialRequest(searchUrl)
     const initialData = yield* extractInitialData(initialRequestResult.html)
-    const pollResult = yield* pollUntilFinished(initialData, initialRequestResult.cookies, searchUrl)
+    
+    const pollResult = yield* makePollRequest(initialData, initialRequestResult.cookies, searchUrl, 1)
 
     const parsedData = yield* parseDealsFromHtml(pollResult.pollData.resultsHtml)
 
@@ -76,7 +40,7 @@ export const search = (
         numberOfFlights: parsedData.flights.length,
         numberOfLegs: parsedData.legs.length,
         numberOfTrips: parsedData.trips.length,
-        pollRetries: pollResult.retries,
+        pollRetries: 0,
         errors: [],
         timeSpentMs,
       },

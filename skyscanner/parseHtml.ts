@@ -9,12 +9,6 @@ export class ParseHtmlError extends Data.TaggedError("ParseHtmlError")<{
   readonly message: string
 }> {}
 
-export interface ParsedDealsData {
-  deals: Deal[]
-  flights: Flight[]
-  legs: Leg[]
-  trips: Trip[]
-}
 
 /**
  * Helper function to parse date from text like "Sun, 1 Feb 2026"

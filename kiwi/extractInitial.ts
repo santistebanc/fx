@@ -1,13 +1,36 @@
-import { DateTime, Effect } from "effect"
+import { DateTime, Effect, Data } from "effect"
+
+export class ExtractInitialDataError extends Data.TaggedError("ExtractInitialDataError")<{
+  readonly cause: unknown
+  readonly html: string
+  readonly message: string
+}> {}
+
+export type InitialData = {
+  _token: string
+  originplace: string
+  destinationplace: string
+  outbounddate: string
+  inbounddate: string
+  cabinclass: string
+  adults: string
+  children: string
+  infants: string
+  currency: string
+  type: string
+  "bags-cabin": string
+  "bags-checked": string
+  noc: string
+}
 
 /**
  * Extracts the Kiwi data object from an HTML string.
  * Looks for a JavaScript object with a 'data:' property containing the specified fields.
  * 
  * @param htmlString - The HTML string to parse
- * @returns An Effect that resolves to the extracted KiwiData object
+ * @returns An Effect that resolves to the extracted InitialData object
  */
-export const extractInitialData = (htmlString: string) =>
+export const extractInitialData = (htmlString: string): Effect.Effect<InitialData, ExtractInitialDataError> =>
   Effect.gen(function* () {
     // Find the data object in the JavaScript code
     // Look for the pattern: data: { ... } that contains '_token'
@@ -18,12 +41,16 @@ export const extractInitialData = (htmlString: string) =>
 
     if (!match) {
       return yield* Effect.fail(
-        new Error("Could not find data object in HTML string")
+        new ExtractInitialDataError({
+          cause: new Error("Could not find data object in HTML string"),
+          html: htmlString,
+          message: "Could not find data object in HTML string",
+        })
       )
     }
 
     const dataObjectString = match[0]
-    const extractField = fieldExtractor(dataObjectString)
+    const extractField = fieldExtractor(dataObjectString, htmlString)
 
     const _token = yield* extractField("_token")
     const originplace = yield* extractField("originplace")
@@ -60,7 +87,7 @@ export const extractInitialData = (htmlString: string) =>
   })
 
 // Extract individual fields using regex
-const fieldExtractor = (dataObjectString: string) => (fieldName: string) =>
+const fieldExtractor = (dataObjectString: string, fullHtml: string) => (fieldName: string) =>
   Effect.gen(function* () {
     // Match: 'fieldName': 'value'
     // The value can contain escaped quotes, so we match until we find a non-escaped closing quote
@@ -73,5 +100,11 @@ const fieldExtractor = (dataObjectString: string) => (fieldName: string) =>
       return yield* Effect.succeed(fieldMatch[1])
     }
 
-    return yield* Effect.fail(new Error(`Could not extract '${fieldName}' field`))
+    return yield* Effect.fail(
+      new ExtractInitialDataError({
+        cause: new Error(`Could not extract '${fieldName}' field`),
+        html: fullHtml,
+        message: `Could not extract '${fieldName}' field`,
+      })
+    )
   })

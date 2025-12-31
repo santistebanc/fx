@@ -3,7 +3,7 @@ import { HttpClient, HttpClientRequest } from "@effect/platform"
 import { extractCookies, mergeCookies } from "../utils"
 import { extractPollData, type PollData } from "./extractPoll"
 import { type InitialData } from "./extractInitial"
-import { SkyscannerConfig } from "./config"
+import { KiwiConfig } from "./config"
 
 export class InitialRequestError extends Data.TaggedError("InitialRequestError")<{
   readonly cause: unknown
@@ -42,7 +42,7 @@ export const makeInitialRequest = (
 
     return { html, cookies }
   }).pipe(
-    Effect.catchAll((error) =>
+    Effect.catchAll((error: unknown) =>
       Effect.fail(
         new InitialRequestError({
           cause: error,
@@ -61,15 +61,15 @@ export const makePollRequest = (
 ): Effect.Effect<
   { pollData: PollData; cookies: string },
   PollRequestError,
-  HttpClient.HttpClient | SkyscannerConfig
+  HttpClient.HttpClient | KiwiConfig
 > =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient
-    const config = yield* SkyscannerConfig
+    const config = yield* KiwiConfig
 
     const formParams = new URLSearchParams(initialData)
 
-    const pollUrl = `${config.baseUrl}/portal/sky/poll`
+    const pollUrl = `${config.baseUrl}/portal/kiwi/poll`
     const request = HttpClientRequest.post(pollUrl, {
       headers: {
         "accept": "*/*",
@@ -100,23 +100,23 @@ export const makePollRequest = (
 
     return { pollData, cookies: updatedCookies }
   }).pipe(
-    Effect.catchAll((error: unknown) => {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : typeof error === "object" && error !== null && "message" in error && typeof error.message === "string"
-            ? (error as { message: string }).message
-            : String(error)
-      return       Effect.gen(function* () {
-        const config = yield* SkyscannerConfig
+    Effect.catchAll((error: unknown) =>
+      Effect.gen(function* () {
+        const config = yield* KiwiConfig
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : typeof error === "object" && error !== null && "message" in error && typeof error.message === "string"
+              ? (error as { message: string }).message
+              : String(error)
         return yield* Effect.fail(
           new PollRequestError({
             cause: error,
-            url: `${config.baseUrl}/portal/sky/poll`,
+            url: `${config.baseUrl}/portal/kiwi/poll`,
             attempt,
             message: `Poll request failed (attempt ${attempt}): ${errorMessage}`,
           })
         )
       })
-    })
+    )
   )
