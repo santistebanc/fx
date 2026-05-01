@@ -1,10 +1,11 @@
 import { test, expect } from "bun:test"
 import { Effect } from "effect"
+import { join } from "node:path"
 import { extractInitialData } from "../extractInitial"
 
 test("extractInitialData extracts correct data from HTML", async () => {
   // Read the HTML file
-  const htmlFile = Bun.file("../samples/initial.html")
+  const htmlFile = Bun.file(join(import.meta.dir, "../samples/initial.html"))
   const htmlString = await htmlFile.text()
 
   // Run the extraction function

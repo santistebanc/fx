@@ -1,10 +1,11 @@
 import { test, expect } from "bun:test"
 import { Effect } from "effect"
+import { join } from "node:path"
 import { extractPollData } from "../extractPoll"
 
 test("extractPollData extracts correct data from poll sample", async () => {
   // Read the poll HTML file
-  const pollFile = Bun.file("../samples/poll.html")
+  const pollFile = Bun.file(join(import.meta.dir, "../samples/poll.html"))
   const pollString = await pollFile.text()
 
   // Run the extraction function

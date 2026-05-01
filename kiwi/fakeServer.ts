@@ -1,32 +1,22 @@
-import { HttpRouter, HttpServerResponse } from "@effect/platform"
+import { HttpServerResponse } from "@effect/platform"
 import { Effect } from "effect"
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
-
-const readSampleFile = (path: string): string => {
-  return readFileSync(join(__dirname, path), "utf-8")
-}
-
-const fakeCookies = [
-  "CookieScriptConsent={\"action\":\"accept\"}; Path=/",
-  "flightsfinder_session=fake_session_token_12345; Path=/",
-]
+import { fixturePortalCookieHeaders, readKiwiFixtureInitialHtml, readKiwiFixturePollHtml } from "../fixturePortal"
 
 export const initialHandler = Effect.gen(function* () {
-  const html = readSampleFile("kiwi/samples/initial.html")
+  const html = readKiwiFixtureInitialHtml()
   return yield* HttpServerResponse.text(html, {
     headers: {
-      "set-cookie": fakeCookies,
+      "set-cookie": [...fixturePortalCookieHeaders],
       "content-type": "text/html; charset=utf-8",
     },
   })
 })
 
 export const pollHandler = Effect.gen(function* () {
-  const html = readSampleFile("kiwi/samples/poll.html")
+  const html = readKiwiFixturePollHtml()
   return yield* HttpServerResponse.text(html, {
     headers: {
-      "set-cookie": fakeCookies,
+      "set-cookie": [...fixturePortalCookieHeaders],
       "content-type": "text/html; charset=utf-8",
     },
   })

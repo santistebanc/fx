@@ -94,6 +94,17 @@ export const makePollRequest = (
 
     const response = yield* client.execute(request)
     const responseText = yield* response.text
+    if (response.status < 200 || response.status >= 300) {
+      const snippet = responseText.replace(/\s+/g, " ").slice(0, 160)
+      return yield* Effect.fail(
+        new PollRequestError({
+          cause: response.status,
+          url: pollUrl,
+          attempt,
+          message: `Poll request HTTP ${response.status} (attempt ${attempt})${snippet ? `: ${snippet}` : ""}`,
+        })
+      )
+    }
     const newCookies = extractCookies(response)
     const updatedCookies = mergeCookies(cookies, newCookies)
     const pollData = yield* extractPollData(responseText)
@@ -107,7 +118,7 @@ export const makePollRequest = (
           : typeof error === "object" && error !== null && "message" in error && typeof error.message === "string"
             ? (error as { message: string }).message
             : String(error)
-      return       Effect.gen(function* () {
+      return Effect.gen(function* () {
         const config = yield* SkyscannerConfig
         return yield* Effect.fail(
           new PollRequestError({

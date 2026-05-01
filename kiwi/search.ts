@@ -1,6 +1,6 @@
 import { Effect, DateTime, Data } from "effect"
 import { HttpClient } from "@effect/platform"
-import { type SearchInput, type SearchResult } from "../schemas"
+import { dedupeParsedDealsData, type SearchInput, type SearchResult } from "../schemas"
 import { buildSearchUrl } from "./buildUrl"
 import { extractInitialData, type InitialData, ExtractInitialDataError } from "./extractInitial"
 import { parseDealsFromHtml, ParseHtmlError } from "./parseHtml"
@@ -12,6 +12,11 @@ export class PollMaxRetriesError extends Data.TaggedError("PollMaxRetriesError")
   readonly message: string
 }> { }
 
+const log = (phase: string, detail?: Record<string, unknown>) => {
+  if (detail === undefined) console.log(`[fx scrape kiwi] ${phase}`)
+  else console.log(`[fx scrape kiwi] ${phase}`, detail)
+}
+
 export const search = (
   searchInput: SearchInput
 ): Effect.Effect<
@@ -22,16 +27,52 @@ export const search = (
   Effect.gen(function* () {
     const startTime = yield* DateTime.now
 
-    const searchUrl = yield* buildSearchUrl(searchInput)
-    const initialRequestResult = yield* makeInitialRequest(searchUrl)
-    const initialData = yield* extractInitialData(initialRequestResult.html)
-    
-    const pollResult = yield* makePollRequest(initialData, initialRequestResult.cookies, searchUrl, 1)
+    log("start", {
+      origin: searchInput.origin,
+      destination: searchInput.destination,
+      departureDate: searchInput.departureDate,
+      returnDate: searchInput.returnDate ?? null,
+    })
 
-    const parsedData = yield* parseDealsFromHtml(pollResult.pollData.resultsHtml)
+    const searchUrl = yield* buildSearchUrl(searchInput)
+    log("GET initial HTML", { url: searchUrl })
+
+    const initialRequestResult = yield* makeInitialRequest(searchUrl)
+    log("initial response", { htmlChars: initialRequestResult.html.length })
+
+    const initialData = yield* extractInitialData(initialRequestResult.html)
+    log("extracted portal session data")
+
+    log("POST search / poll (single request)")
+    const pollResult = yield* makePollRequest(initialData, initialRequestResult.cookies, searchUrl, 1)
+    log("poll response", {
+      finished: pollResult.pollData.finished,
+      resultsHtmlChars: pollResult.pollData.resultsHtml.length,
+    })
+
+    log("parsing results HTML")
+    const parsedRaw = yield* parseDealsFromHtml(pollResult.pollData.resultsHtml)
+    const parsedData = dedupeParsedDealsData(parsedRaw)
 
     const endTime = yield* DateTime.now
     const timeSpentMs = endTime.epochMillis - startTime.epochMillis
+
+    const dedupeDropped = {
+      deals: parsedRaw.deals.length - parsedData.deals.length,
+      trips: parsedRaw.trips.length - parsedData.trips.length,
+      legs: parsedRaw.legs.length - parsedData.legs.length,
+      flights: parsedRaw.flights.length - parsedData.flights.length,
+    }
+    log("parse complete", {
+      deals: parsedData.deals.length,
+      trips: parsedData.trips.length,
+      legs: parsedData.legs.length,
+      flights: parsedData.flights.length,
+      ...(dedupeDropped.deals || dedupeDropped.trips || dedupeDropped.legs || dedupeDropped.flights
+        ? { dedupeDropped }
+        : {}),
+      timeSpentMs,
+    })
 
     return {
       data: parsedData,

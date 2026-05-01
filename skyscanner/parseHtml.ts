@@ -1,6 +1,7 @@
 import { Effect, DateTime, Schema, Data } from "effect"
 import * as cheerio from "cheerio"
 import { createHash } from "node:crypto"
+import { euroDisplayTextToCents, listItemPriceCents } from "../utils"
 import { Deal, Flight, Leg, Trip } from "../schemas"
 
 export class ParseHtmlError extends Data.TaggedError("ParseHtmlError")<{
@@ -94,11 +95,11 @@ export const parseDealsFromHtml = (
 
       // Find the corresponding list-item to get price and link
       const listItem = $(`.list-item a[onclick*="${modalId}"]`).closest(".list-item")
-      const priceText = listItem.find(".prices").text().trim()
-      const priceMatch = priceText.match(/€(\d+)/)
-      const price = priceMatch && priceMatch[1] ? Number.parseFloat(priceMatch[1]) * 100 : 0 // Convert to cents
-
-      const link = listItem.find('a[href^="https://agw.skyscnr.com"]').first().attr("href") || ""
+      const row = listItem.closest(".list-item.row")
+      const rowSummaryPriceText = listItem.find(".prices").text().trim()
+      const rowFallbackPrice = listItemPriceCents(row.attr("data-price"), rowSummaryPriceText)
+      const rowFallbackLink =
+        listItem.find('a[href^="https://agw.skyscnr.com"]').first().attr("href")?.trim() || ""
 
       // Extract outbound and return sections
       // For finding headings (dates), use parent to get the container
@@ -141,10 +142,6 @@ export const parseDealsFromHtml = (
           )
         }
       }
-
-      // Extract provider from "Book Your Ticket" section
-      const providerSection = $modal.find('p._heading:contains("Book Your Ticket")').parent()
-      const providerName = providerSection.find("._similar > div > p").first().text().trim() || "Unknown"
 
       // Extract all flights from outbound
       const outboundFlights: Flight[] = []
@@ -401,36 +398,55 @@ export const parseDealsFromHtml = (
       const outboundSummary = listItem.find(".item").first().find(".stops p").last().find("span").last().text().trim()
       const destination = outboundSummary || destinationFromFlights
 
-      // Create deal
-      const dealData = {
-        id: `${tripIdHash}_skyscanner_${providerName.replace(/\s+/g, "_")}`,
-        trip: tripIdHash,
-        origin,
-        destination,
-        departure_date: outboundDate,
-        departure_time: firstOutboundFlight.departure_time,
-        return_date: returnDateParsed,
-        return_time: firstReturnFlight?.departure_time || null,
-        source: "skyscanner",
-        provider: providerName,
-        price,
-        link,
-        created_at: nowIso,
-        updated_at: nowIso,
-      }
+      const providerSection = $modal.find('p._heading:contains("Book Your Ticket")').parent()
+      const bookingOfferDivs = providerSection.find("._similar > div").toArray()
 
-      // Validate and decode deal using schema
-      const deal = yield* Schema.decodeUnknown(Deal)(dealData).pipe(
-        Effect.mapError(
-          (error) =>
-            new ParseHtmlError({
-              cause: error,
-              html: resultsHtml,
-              message: `Failed to parse HTML: ${error instanceof Error ? error.message : String(error)}`,
+      const offerSpecs: ReadonlyArray<{ offerIndex: number; providerName: string; price: number; link: string }> =
+        bookingOfferDivs.length === 0
+          ? [{ offerIndex: 0, providerName: "Unknown", price: rowFallbackPrice, link: rowFallbackLink }]
+          : bookingOfferDivs.map((div, offerIndex) => {
+              const $offer = $(div)
+              const paras = $offer.children("p")
+              const providerName = paras.first().text().trim() || "Unknown"
+              const pricePara = paras.eq(1)
+              const optionCents = euroDisplayTextToCents(pricePara.text())
+              const price = optionCents > 0 ? optionCents : rowFallbackPrice
+              const link =
+                pricePara.find('a[href^="https://agw.skyscnr.com"]').attr("href")?.trim() || rowFallbackLink
+              return { offerIndex, providerName, price, link }
             })
+
+      for (const spec of offerSpecs) {
+        const providerSlug = spec.providerName.replace(/\s+/g, "_")
+        const dealData = {
+          id: `${tripIdHash}_skyscanner_${providerSlug}_${spec.offerIndex}`,
+          trip: tripIdHash,
+          origin,
+          destination,
+          departure_date: outboundDate,
+          departure_time: firstOutboundFlight.departure_time,
+          return_date: returnDateParsed,
+          return_time: firstReturnFlight?.departure_time || null,
+          source: "skyscanner",
+          provider: spec.providerName,
+          price: spec.price,
+          link: spec.link,
+          created_at: nowIso,
+          updated_at: nowIso,
+        }
+
+        const deal = yield* Schema.decodeUnknown(Deal)(dealData).pipe(
+          Effect.mapError(
+            (error) =>
+              new ParseHtmlError({
+                cause: error,
+                html: resultsHtml,
+                message: `Failed to parse HTML: ${error instanceof Error ? error.message : String(error)}`,
+              })
+          )
         )
-      )
-      deals.push(deal)
+        deals.push(deal)
+      }
     }
 
     return {

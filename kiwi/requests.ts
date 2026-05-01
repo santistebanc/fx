@@ -69,7 +69,7 @@ export const makePollRequest = (
 
     const formParams = new URLSearchParams(initialData)
 
-    const pollUrl = `${config.baseUrl}/portal/kiwi/poll`
+    const pollUrl = `${config.baseUrl}/portal/kiwi/search`
     const request = HttpClientRequest.post(pollUrl, {
       headers: {
         "accept": "*/*",
@@ -94,6 +94,17 @@ export const makePollRequest = (
 
     const response = yield* client.execute(request)
     const responseText = yield* response.text
+    if (response.status < 200 || response.status >= 300) {
+      const snippet = responseText.replace(/\s+/g, " ").slice(0, 160)
+      return yield* Effect.fail(
+        new PollRequestError({
+          cause: response.status,
+          url: pollUrl,
+          attempt,
+          message: `Poll request HTTP ${response.status} (attempt ${attempt})${snippet ? `: ${snippet}` : ""}`,
+        })
+      )
+    }
     const newCookies = extractCookies(response)
     const updatedCookies = mergeCookies(cookies, newCookies)
     const pollData = yield* extractPollData(responseText)
@@ -112,7 +123,7 @@ export const makePollRequest = (
         return yield* Effect.fail(
           new PollRequestError({
             cause: error,
-            url: `${config.baseUrl}/portal/kiwi/poll`,
+            url: `${config.baseUrl}/portal/kiwi/search`,
             attempt,
             message: `Poll request failed (attempt ${attempt}): ${errorMessage}`,
           })

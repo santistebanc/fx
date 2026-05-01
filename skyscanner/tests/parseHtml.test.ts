@@ -1,10 +1,11 @@
 import { test, expect } from "bun:test"
 import { Effect } from "effect"
+import { join } from "node:path"
 import { parseDealsFromHtml } from "../parseHtml"
 
 test("parseDealsFromHtml parses data from round-trip-sample with literal values", async () => {
   // Read the round-trip-sample HTML file
-  const htmlFile = Bun.file("../samples/round-trip.html")
+  const htmlFile = Bun.file(join(import.meta.dir, "../samples/round-trip.html"))
   const html = await htmlFile.text()
 
   // Parse deals from HTML
@@ -19,15 +20,17 @@ test("parseDealsFromHtml parses data from round-trip-sample with literal values"
   expect(Array.isArray(result.legs)).toBe(true)
   expect(Array.isArray(result.trips)).toBe(true)
 
-  // Verify that we got some data
-  expect(result.deals.length).toBeGreaterThan(0)
+  // Two booking rows under "Book Your Ticket" (Air France + KLM), same itinerary / trip
+  expect(result.deals.length).toBe(2)
   expect(result.flights.length).toBeGreaterThan(0)
   expect(result.trips.length).toBeGreaterThan(0)
+
+  const tripId = result.trips[0]!.id
 
   // Verify deal structure with literal values from first deal
   if (result.deals.length > 0) {
     const deal = result.deals[0]!
-    
+
     // Check literal values from the first list-item in the HTML
     expect(deal.source).toBe("skyscanner")
     expect(deal.origin).toBe("BER") // First flight origin
@@ -36,24 +39,33 @@ test("parseDealsFromHtml parses data from round-trip-sample with literal values"
     expect(deal.departure_time).toBe("06:00") // First flight departure time
     expect(deal.return_date).toBe("2026-02-04") // Parsed from "Wed, 4 Feb 2026"
     expect(deal.return_time).toBe("06:00") // First return flight departure time
-    expect(deal.price).toBe(36100) // €361.00 in cents from data-price="36100"
+    expect(deal.price).toBe(36100) // €361 from modal offer text / row
     expect(deal.provider).toBe("Air France") // First provider in "Book Your Ticket" section
-    
+
     // Check that link contains the expected structure
     expect(deal.link).toContain("https://agw.skyscnr.com")
-    
+    expect(deal.link).toContain("airf")
+
     // Check that id, trip follow expected patterns (these are hashed, so we check format)
-    expect(deal.id).toMatch(/^[a-f0-9]{64}_skyscanner_Air_France$/)
+    expect(deal.id).toMatch(/^[a-f0-9]{64}_skyscanner_Air_France_0$/)
+    expect(deal.trip).toBe(tripId)
     expect(deal.trip).toMatch(/^[a-f0-9]{64}$/)
-    
+
     // Check timestamps are valid ISO format
     expect(deal.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
     expect(deal.updated_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
-    
+
     // Test isRoundTrip method - should be true for this deal
     const isRoundTrip = deal.isRoundTrip()
     expect(isRoundTrip).toBe(true)
   }
+
+  const deal1 = result.deals[1]!
+  expect(deal1.trip).toBe(tripId)
+  expect(deal1.provider).toBe("KLM")
+  expect(deal1.price).toBe(36100)
+  expect(deal1.link).toContain("klm1")
+  expect(deal1.id).toMatch(/^[a-f0-9]{64}_skyscanner_KLM_1$/)
 
   // Verify flight structure with literal values from first flight
   if (result.flights.length > 0) {
@@ -154,7 +166,7 @@ test("parseDealsFromHtml parses data from round-trip-sample with literal values"
 
 test("parseDealsFromHtml parses data from oneway-trip-sample with literal values", async () => {
   // Read the oneway-trip-sample HTML file
-  const htmlFile = Bun.file("../samples/oneway-trip.html")
+  const htmlFile = Bun.file(join(import.meta.dir, "../samples/oneway-trip.html"))
   const html = await htmlFile.text()
 
   // Parse deals from HTML
@@ -193,7 +205,7 @@ test("parseDealsFromHtml parses data from oneway-trip-sample with literal values
     expect(deal.link).toContain("https://agw.skyscnr.com")
     
     // Check that id, trip follow expected patterns (these are hashed, so we check format)
-    expect(deal.id).toMatch(/^[a-f0-9]{64}_skyscanner_Air_Europa$/)
+    expect(deal.id).toMatch(/^[a-f0-9]{64}_skyscanner_Air_Europa_0$/)
     expect(deal.trip).toMatch(/^[a-f0-9]{64}$/)
     
     // Check timestamps are valid ISO format

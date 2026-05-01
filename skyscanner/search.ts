@@ -1,6 +1,6 @@
 import { Effect, Duration, DateTime, Data } from "effect"
 import { HttpClient } from "@effect/platform"
-import { type SearchInput, type SearchResult } from "../schemas"
+import { dedupeParsedDealsData, type SearchInput, type SearchResult } from "../schemas"
 import { buildSearchUrl } from "./buildUrl"
 import { extractInitialData, type InitialData, ExtractInitialDataError } from "./extractInitial"
 import { type PollData } from "./extractPoll"
@@ -13,11 +13,22 @@ export class PollMaxRetriesError extends Data.TaggedError("PollMaxRetriesError")
   readonly message: string
 }> { }
 
+const log = (phase: string, detail?: Record<string, unknown>) => {
+  if (detail === undefined) console.log(`[fx scrape skyscanner] ${phase}`)
+  else console.log(`[fx scrape skyscanner] ${phase}`, detail)
+}
+
+/** Poll until portal reports finished; override with FX_POLL_MAX_RETRIES (default 180 attempts, 1s apart). */
+const defaultPollMaxRetries = (): number => {
+  const n = Number(process.env.FX_POLL_MAX_RETRIES)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 180
+}
+
 const pollUntilFinished = (
   initialData: InitialData,
   cookies: string,
   searchUrl: string,
-  maxRetries: number = 20
+  maxRetries: number = defaultPollMaxRetries()
 ): Effect.Effect<
   { pollData: PollData; cookies: string; retries: number },
   PollRequestError | PollMaxRetriesError,
@@ -29,11 +40,19 @@ const pollUntilFinished = (
     let pollData: PollData | null = null
 
     while (retries < maxRetries) {
-      const result = yield* makePollRequest(initialData, currentCookies, searchUrl, retries + 1)
+      const attempt = retries + 1
+      log(`poll attempt ${attempt}/${maxRetries}`)
+      const result = yield* makePollRequest(initialData, currentCookies, searchUrl, attempt)
       pollData = result.pollData
       currentCookies = result.cookies
 
+      log(`poll ${attempt} response`, {
+        finished: pollData.finished,
+        resultsHtmlChars: pollData.resultsHtml?.length ?? 0,
+      })
+
       if (pollData.finished) {
+        log(`poll finished after ${attempt} attempt(s)`)
         return { pollData, cookies: currentCookies, retries }
       }
 
@@ -59,15 +78,47 @@ export const search = (
   Effect.gen(function* () {
     const startTime = yield* DateTime.now
 
+    log("start", {
+      origin: searchInput.origin,
+      destination: searchInput.destination,
+      departureDate: searchInput.departureDate,
+      returnDate: searchInput.returnDate ?? null,
+    })
+
     const searchUrl = yield* buildSearchUrl(searchInput)
+    log("GET initial HTML", { url: searchUrl })
+
     const initialRequestResult = yield* makeInitialRequest(searchUrl)
+    log("initial response", { htmlChars: initialRequestResult.html.length })
+
     const initialData = yield* extractInitialData(initialRequestResult.html)
+    log("extracted portal session data")
+
     const pollResult = yield* pollUntilFinished(initialData, initialRequestResult.cookies, searchUrl)
 
-    const parsedData = yield* parseDealsFromHtml(pollResult.pollData.resultsHtml)
+    log("parsing results HTML")
+    const parsedRaw = yield* parseDealsFromHtml(pollResult.pollData.resultsHtml)
+    const parsedData = dedupeParsedDealsData(parsedRaw)
 
     const endTime = yield* DateTime.now
     const timeSpentMs = endTime.epochMillis - startTime.epochMillis
+
+    const dedupeDropped = {
+      deals: parsedRaw.deals.length - parsedData.deals.length,
+      trips: parsedRaw.trips.length - parsedData.trips.length,
+      legs: parsedRaw.legs.length - parsedData.legs.length,
+      flights: parsedRaw.flights.length - parsedData.flights.length,
+    }
+    log("parse complete", {
+      deals: parsedData.deals.length,
+      trips: parsedData.trips.length,
+      legs: parsedData.legs.length,
+      flights: parsedData.flights.length,
+      ...(dedupeDropped.deals || dedupeDropped.trips || dedupeDropped.legs || dedupeDropped.flights
+        ? { dedupeDropped }
+        : {}),
+      timeSpentMs,
+    })
 
     return {
       data: parsedData,

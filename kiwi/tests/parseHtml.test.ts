@@ -1,10 +1,11 @@
 import { test, expect } from "bun:test"
 import { Effect } from "effect"
+import { join } from "node:path"
 import { parseDealsFromHtml } from "../parseHtml"
 
 test("parseDealsFromHtml parses data from round-trip with literal values", async () => {
   // Read the round-trip HTML file
-  const htmlFile = Bun.file("../samples/round-trip.html")
+  const htmlFile = Bun.file(join(import.meta.dir, "../samples/round-trip.html"))
   const html = await htmlFile.text()
 
   // Parse deals from HTML
@@ -143,7 +144,7 @@ test("parseDealsFromHtml parses data from round-trip with literal values", async
 
 test("parseDealsFromHtml parses data from oneway-trip with literal values", async () => {
   // Read the oneway-trip HTML file
-  const htmlFile = Bun.file("../samples/oneway-trip.html")
+  const htmlFile = Bun.file(join(import.meta.dir, "../samples/oneway-trip.html"))
   const html = await htmlFile.text()
 
   // Parse deals from HTML

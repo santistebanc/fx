@@ -1,4 +1,5 @@
 import { Effect, Data } from "effect"
+import { splitPortalPollHeaderAndHtml } from "../utils"
 
 export class ReadResponseError extends Data.TaggedError("ReadResponseError")<{
   readonly cause: unknown
@@ -13,17 +14,28 @@ export interface PollData {
 
 /**
  * Extracts poll data from a pipe-delimited string.
- * The string format is: N|530|...|resultsHtml|...
- * 
+ * The string format is: `N|530|…|…|` on the first line, then HTML body.
+ *
  * @param pollString - The pipe-delimited string to parse
  * @returns An Effect that resolves to the extracted PollData object
  */
 export const extractPollData = (pollString: string): Effect.Effect<PollData, ReadResponseError> =>
   Effect.gen(function* () {
-    const parts = pollString.split("|")
+    const { headerLine, resultsHtml } = splitPortalPollHeaderAndHtml(pollString)
+    if (!/^(?:Y|N)\|/.test(headerLine)) {
+      const preview = headerLine.slice(0, 240).replace(/\s+/g, " ")
+      const message = `Poll header missing Y| or N| prefix (blocked or HTML error?). Starts with: ${preview}`
+      return yield* Effect.fail(
+        new ReadResponseError({
+          cause: message,
+          message: `Failed to read response: ${message}`,
+        })
+      )
+    }
+    const parts = headerLine.split("|")
 
-    if (parts.length < 7) {
-      const message = `Expected at least 7 pipe-delimited parts, got ${parts.length}`
+    if (parts.length < 3) {
+      const message = `Expected at least 3 pipe-delimited header fields, got ${parts.length}`
       return yield* Effect.fail(
         new ReadResponseError({
           cause: message,
@@ -65,9 +77,9 @@ export const extractPollData = (pollString: string): Effect.Effect<PollData, Rea
       )
     }
 
-    const resultsHtml = parts[6]?.trim() ?? ""
-    if (!resultsHtml) {
-      const message = "Seventh item (resultsHtml) is missing or empty"
+    // Live portal sometimes returns only the header row while still loading (`N|…`).
+    if (finished && !resultsHtml.trim()) {
+      const message = "HTML body after header line is missing or empty (expected when poll finished)"
       return yield* Effect.fail(
         new ReadResponseError({
           cause: message,

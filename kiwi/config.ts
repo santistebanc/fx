@@ -1,4 +1,5 @@
 import { Context, Layer } from "effect"
+import { fakeServerOrigin } from "../utils"
 
 export class KiwiConfig extends Context.Tag("KiwiConfig")<
   KiwiConfig,
@@ -10,5 +11,9 @@ export class KiwiConfig extends Context.Tag("KiwiConfig")<
 export const KiwiConfigLive = (baseUrl: string) =>
   Layer.succeed(KiwiConfig, { baseUrl })
 
-export const KiwiConfigFake = KiwiConfigLive("http://localhost:3000")
+export const KiwiConfigFake = Layer.succeed(KiwiConfig, {
+  get baseUrl() {
+    return fakeServerOrigin()
+  },
+})
 export const KiwiConfigReal = KiwiConfigLive("https://www.flightsfinder.com")

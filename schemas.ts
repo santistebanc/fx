@@ -74,6 +74,30 @@ export interface ParsedDealsData {
   trips: Trip[]
 }
 
+/** Keep first row per id; order preserved from the scrape arrays. */
+const dedupeById = <T>(items: readonly T[], key: (item: T) => string): T[] => {
+  const seen = new Set<string>()
+  const out: T[] = []
+  for (const item of items) {
+    const k = key(item)
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(item)
+  }
+  return out
+}
+
+/**
+ * Collapses duplicate entities by `id` after HTML parse (first occurrence wins).
+ * Foreign keys remain valid: deals → trips, legs → trips & flights.
+ */
+export const dedupeParsedDealsData = (data: ParsedDealsData): ParsedDealsData => ({
+  deals: dedupeById(data.deals, (d) => d.id),
+  flights: dedupeById(data.flights, (f) => f.id),
+  legs: dedupeById(data.legs, (l) => l.id),
+  trips: dedupeById(data.trips, (t) => t.id),
+})
+
 /**
  * Search result containing parsed data and metadata
  */
@@ -171,12 +195,6 @@ export class Deal extends Schema.Class<Deal>("Deal")({
 }
 
 /**
- * Deal schema (exported for convenience)
- * The Deal class itself can be used as a schema
- */
-export const DealSchema = Deal
-
-/**
  * Flight class
  */
 export class Flight extends Schema.Class<Flight>("Flight")({
@@ -233,12 +251,6 @@ export class Flight extends Schema.Class<Flight>("Flight")({
 }
 
 /**
- * Flight schema (exported for convenience)
- * The Flight class itself can be used as a schema
- */
-export const FlightSchema = Flight
-
-/**
  * Leg class
  */
 export class Leg extends Schema.Class<Leg>("Leg")({
@@ -263,12 +275,6 @@ export class Leg extends Schema.Class<Leg>("Leg")({
 }
 
 /**
- * Leg schema (exported for convenience)
- * The Leg class itself can be used as a schema
- */
-export const LegSchema = Leg
-
-/**
  * Trip class
  */
 export class Trip extends Schema.Class<Trip>("Trip")({
@@ -286,9 +292,3 @@ export class Trip extends Schema.Class<Trip>("Trip")({
     return Effect.succeed(parsed.value)
   }
 }
-
-/**
- * Trip schema (exported for convenience)
- * The Trip class itself can be used as a schema
- */
-export const TripSchema = Trip

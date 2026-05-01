@@ -1,10 +1,11 @@
 import { test, expect } from "bun:test"
 import { Effect } from "effect"
+import { join } from "node:path"
 import { extractPollData } from "../extractPoll"
 
 test("extractPollData extracts correct data from poll-0 sample", async () => {
   // Read the poll-0 HTML file
-  const pollFile = Bun.file("../samples/poll-0.html")
+  const pollFile = Bun.file(join(import.meta.dir, "../samples/poll-0.html"))
   const pollString = await pollFile.text()
 
   // Run the extraction function
@@ -19,7 +20,7 @@ test("extractPollData extracts correct data from poll-0 sample", async () => {
 
 test("extractPollData extracts correct data from poll-1 sample", async () => {
   // Read the poll-1 HTML file
-  const pollFile = Bun.file("../samples/poll-1.html")
+  const pollFile = Bun.file(join(import.meta.dir, "../samples/poll-1.html"))
   const pollString = await pollFile.text()
 
   // Run the extraction function

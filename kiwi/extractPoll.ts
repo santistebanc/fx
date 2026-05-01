@@ -1,4 +1,5 @@
 import { Effect } from "effect"
+import { splitPortalPollHeaderAndHtml } from "../utils"
 
 /**
  * Type definition for the extracted poll data
@@ -11,19 +12,28 @@ export interface PollData {
 
 /**
  * Extracts poll data from a pipe-delimited string.
- * The string format is: Y|500|...|resultsHtml|...
+ * The string format is: `Y|500|…|…|` on the first line, then HTML body.
  * Note: Kiwi polls always return 'Y' (finished) as the first character.
- * 
+ *
  * @param pollString - The pipe-delimited string to parse
  * @returns An Effect that resolves to the extracted PollData object
  */
 export const extractPollData = (pollString: string): Effect.Effect<PollData, Error> =>
   Effect.gen(function* () {
-    const parts = pollString.split("|")
-
-    if (parts.length < 7) {
+    const { headerLine, resultsHtml } = splitPortalPollHeaderAndHtml(pollString)
+    if (!/^(?:Y|N)\|/.test(headerLine)) {
+      const preview = headerLine.slice(0, 240).replace(/\s+/g, " ")
       return yield* Effect.fail(
-        new Error(`Expected at least 7 pipe-delimited parts, got ${parts.length}`)
+        new Error(
+          `Kiwi poll header missing Y| or N| prefix (blocked or HTML error page?). Starts with: ${preview}`
+        )
+      )
+    }
+    const parts = headerLine.split("|")
+
+    if (parts.length < 3) {
+      return yield* Effect.fail(
+        new Error(`Expected at least 3 pipe-delimited header fields, got ${parts.length}`)
       )
     }
 
@@ -48,10 +58,8 @@ export const extractPollData = (pollString: string): Effect.Effect<PollData, Err
       )
     }
 
-    // Seventh item (index 6): HTML string -> 'resultsHtml'
-    const resultsHtml = parts[6]?.trim() ?? ""
-    if (!resultsHtml) {
-      return yield* Effect.fail(new Error("Seventh item (resultsHtml) is missing or empty"))
+    if (!resultsHtml.trim()) {
+      return yield* Effect.fail(new Error("HTML body after header line is missing or empty"))
     }
 
     return {

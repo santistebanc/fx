@@ -1,6 +1,7 @@
 import { Effect, DateTime, Schema, Data } from "effect"
 import * as cheerio from "cheerio"
 import { createHash } from "node:crypto"
+import { listItemPriceCents } from "../utils"
 import { Deal, Flight, Leg, Trip, type ParsedDealsData } from "../schemas"
 
 export class ParseHtmlError extends Data.TaggedError("ParseHtmlError")<{
@@ -97,9 +98,9 @@ export const parseDealsFromHtml = (
 
       // Find the corresponding list-item to get price and link
       const listItem = $(`.list-item a[onclick*="${modalId}"]`).closest(".list-item")
+      const row = listItem.closest(".list-item.row")
       const priceText = listItem.find(".prices").text().trim()
-      const priceMatch = priceText.match(/€(\d+)/)
-      const price = priceMatch && priceMatch[1] ? Number.parseFloat(priceMatch[1]) * 100 : 0 // Convert to cents
+      const price = listItemPriceCents(row.attr("data-price"), priceText)
 
       const link = listItem.find('a[href^="https://www.kiwi.com/deep"]').first().attr("href") || ""
 
