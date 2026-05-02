@@ -2,26 +2,21 @@
  * Flight compare UI + JSON API.
  * Run: bun run web   (default http://localhost:3010)
  *
- * Local fixtures: choosing “Local fixtures” in the UI uses HTML samples served from this same process
- * (no need for `bun run serve`). Standalone `bun run serve` is still available for CLI/tests on PORT.
+ * POST /api/search runs live FlightsFinder scrapes only.
+ * GET /api/fixture-demo returns the frozen snapshot from `fixture.ts` (demo UI button).
  *
- * POST /api/search returns every deal from the scrape per selected source (no server-side row cap);
- * the UI merges legs/flights/trips into one ranked list. Pagination is UI-only.
+ * For offline portal HTML used by CLI (`bun run demo` without --real), run `bun run serve`
+ * on PORT — this process no longer embeds `/portal/*` fixtures.
  */
 import { readFileSync } from "node:fs"
+import { stat } from "node:fs/promises"
 import { join } from "node:path"
 import { Effect, ParseResult, Schema } from "effect"
 import type { SearchInput, SearchResult } from "../schemas"
 import { SearchInputSchema } from "../schemas"
-import {
-  fixturePortalResponseHeaders,
-  readKiwiFixtureInitialHtml,
-  readKiwiFixturePollHtml,
-  readSkyscannerFixtureInitialHtml,
-  readSkyscannerFixturePollHtml,
-} from "../fixturePortal"
-import { searchWithFake as skyFake, searchWithReal as skyReal } from "../skyscanner/searchWithConfig"
-import { searchWithFake as kiwiFake, searchWithReal as kiwiReal } from "../kiwi/searchWithConfig"
+import { fixture } from "../fixture"
+import { searchWithReal as skyReal } from "../skyscanner/searchWithConfig"
+import { searchWithReal as kiwiReal } from "../kiwi/searchWithConfig"
 
 const dir = import.meta.dir
 
@@ -31,6 +26,34 @@ const apiLog = (msg: string, detail?: Record<string, unknown>) => {
 }
 
 const loadPublic = (name: string) => readFileSync(join(dir, "public", name), "utf-8")
+
+let appJsBundleCache: { mtimeMs: number; body: Uint8Array } | null = null
+
+async function bundleAppJs(): Promise<Uint8Array> {
+  const entry = join(dir, "public", "app.ts")
+  const st = await stat(entry)
+  if (appJsBundleCache && appJsBundleCache.mtimeMs === st.mtimeMs) {
+    return appJsBundleCache.body
+  }
+  const result = await Bun.build({
+    entrypoints: [entry],
+    target: "browser",
+    format: "esm",
+    minify: false,
+    sourcemap: "none",
+  })
+  if (!result.success) {
+    for (const log of result.logs) {
+      console.error(log)
+    }
+    throw new Error("Bun.build failed for web/public/app.ts")
+  }
+  const out = result.outputs[0]
+  if (!out) throw new Error("No bundle output for app.ts")
+  const body = new Uint8Array(await out.arrayBuffer())
+  appJsBundleCache = { mtimeMs: st.mtimeMs, body }
+  return body
+}
 
 const htmlResponse = (body: string, type: string) =>
   new Response(body, {
@@ -46,23 +69,6 @@ const jsonResponse = (data: unknown, status = 200) =>
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   })
 
-/** Same portal paths as FlightsFinder; sample HTML only (fake UI mode). */
-function tryFixturePortalResponse(req: Request, pathname: string): Response | null {
-  if (req.method === "GET" && pathname === "/portal/sky") {
-    return new Response(readSkyscannerFixtureInitialHtml(), { headers: fixturePortalResponseHeaders() })
-  }
-  if (req.method === "POST" && pathname === "/portal/sky/poll") {
-    return new Response(readSkyscannerFixturePollHtml(), { headers: fixturePortalResponseHeaders() })
-  }
-  if (req.method === "GET" && pathname === "/portal/kiwi") {
-    return new Response(readKiwiFixtureInitialHtml(), { headers: fixturePortalResponseHeaders() })
-  }
-  if (req.method === "POST" && (pathname === "/portal/kiwi/search" || pathname === "/portal/kiwi/poll")) {
-    return new Response(readKiwiFixturePollHtml(), { headers: fixturePortalResponseHeaders() })
-  }
-  return null
-}
-
 type SourceKey = "skyscanner" | "kiwi"
 
 type ApiBody = {
@@ -71,7 +77,6 @@ type ApiBody = {
   departureDate?: unknown
   returnDate?: unknown
   sources?: unknown
-  mode?: unknown
 }
 
 /** Trips / legs / flights referenced by all scraped deals for this source. */
@@ -103,7 +108,6 @@ const formatLeft = (left: unknown): string => {
 }
 
 const runSource = async (
-  mode: "fake" | "real",
   source: SourceKey,
   input: SearchInput
 ): Promise<
@@ -118,18 +122,15 @@ const runSource = async (
   | { ok: false; source: SourceKey; error: string }
 > => {
   const t0 = Date.now()
-  apiLog(`→ ${source}`, { mode })
+  apiLog(`→ ${source}`, { mode: "real" })
 
-  const eff =
-    source === "skyscanner"
-      ? mode === "fake"
-        ? skyFake(input)
-        : skyReal(input)
-      : mode === "fake"
-        ? kiwiFake(input)
-        : kiwiReal(input)
+  const eff: Effect.Effect<SearchResult, unknown, never> =
+    source === "skyscanner" ? skyReal(input) : kiwiReal(input)
 
-  const out = await Effect.runPromise(eff.pipe(Effect.either))
+  type SearchEither =
+    | { readonly _tag: "Right"; readonly right: SearchResult }
+    | { readonly _tag: "Left"; readonly left: unknown }
+  const out = (await Effect.runPromise(eff.pipe(Effect.either))) as SearchEither
   const elapsedMs = Date.now() - t0
   if (out._tag === "Right") {
     const full = out.right
@@ -149,7 +150,7 @@ const runSource = async (
   return { ok: false, source, error: formatLeft(out.left) }
 }
 
-const parseBody = (raw: ApiBody): { ok: false; error: string } | { ok: true; input: SearchInput; sources: SourceKey[]; mode: "fake" | "real" } => {
+const parseBody = (raw: ApiBody): { ok: false; error: string } | { ok: true; input: SearchInput; sources: SourceKey[] } => {
   const decoded = Schema.decodeUnknownEither(SearchInputSchema)({
     origin: raw.origin,
     destination: raw.destination,
@@ -161,7 +162,6 @@ const parseBody = (raw: ApiBody): { ok: false; error: string } | { ok: true; inp
     return { ok: false, error: msg }
   }
 
-  const mode = raw.mode === "fake" ? "fake" : "real"
   const srcRaw = raw.sources
   const sources: SourceKey[] = Array.isArray(srcRaw)
     ? srcRaw.filter((s): s is SourceKey => s === "skyscanner" || s === "kiwi")
@@ -171,19 +171,15 @@ const parseBody = (raw: ApiBody): { ok: false; error: string } | { ok: true; inp
     return { ok: false, error: "Select at least one source (skyscanner or kiwi)" }
   }
 
-  return { ok: true, input: decoded.right, sources, mode }
+  return { ok: true, input: decoded.right, sources }
 }
 
 const port = Number(process.env.WEB_PORT) || 3010
-process.env.FIXTURE_HTTP_ORIGIN = `http://127.0.0.1:${port}`
 
 Bun.serve({
   port,
   async fetch(req) {
     const url = new URL(req.url)
-
-    const fixtureRes = tryFixturePortalResponse(req, url.pathname)
-    if (fixtureRes) return fixtureRes
 
     if (req.method === "GET" && url.pathname === "/") {
       return htmlResponse(loadPublic("index.html"), "text/html; charset=utf-8")
@@ -192,7 +188,26 @@ Bun.serve({
       return htmlResponse(loadPublic("styles.css"), "text/css; charset=utf-8")
     }
     if (req.method === "GET" && url.pathname === "/app.js") {
-      return htmlResponse(loadPublic("app.js"), "application/javascript; charset=utf-8")
+      try {
+        const body = await bundleAppJs()
+        return new Response(body, {
+          headers: {
+            "content-type": "application/javascript; charset=utf-8",
+            "cache-control": "no-store",
+          },
+        })
+      } catch (e) {
+        console.error("[fx web] bundle app.ts failed:", e)
+        return new Response(`console.error(${JSON.stringify(String(e))});\n`, {
+          status: 500,
+          headers: { "content-type": "application/javascript; charset=utf-8" },
+        })
+      }
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/fixture-demo") {
+      apiLog("GET /api/fixture-demo")
+      return jsonResponse(fixture)
     }
 
     if (req.method === "POST" && url.pathname === "/api/search") {
@@ -208,10 +223,10 @@ Bun.serve({
         return jsonResponse({ error: parsed.error }, 400)
       }
 
-      const { input, sources, mode } = parsed
+      const { input, sources } = parsed
       const reqT0 = Date.now()
       apiLog("POST /api/search", {
-        mode,
+        mode: "real",
         sources,
         origin: input.origin,
         destination: input.destination,
@@ -219,10 +234,10 @@ Bun.serve({
         returnDate: input.returnDate ?? null,
       })
 
-      const settled = await Promise.all(sources.map((s) => runSource(mode, s, input)))
+      const settled = await Promise.all(sources.map((s) => runSource(s, input)))
 
       const payload = {
-        mode,
+        mode: "real" as const,
         input,
         sources: settled.map((r) =>
           r.ok
@@ -258,5 +273,5 @@ Bun.serve({
 })
 
 console.log(`Flight UI  http://localhost:${port}`)
-console.log(`API        POST http://localhost:${port}/api/search`)
-console.log(`Fixtures   GET/POST http://127.0.0.1:${port}/portal/{sky,kiwi}/… (embedded; optional: bun run serve on PORT for CLI)`)
+console.log(`API        POST http://localhost:${port}/api/search  (live)`)
+console.log(`           GET  http://localhost:${port}/api/fixture-demo  (snapshot from fixture.ts)`)

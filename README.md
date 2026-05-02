@@ -15,17 +15,17 @@ bun install
 | Command | Purpose |
 | --- | --- |
 | `bun test` | Unit tests (parsers, utils, graph dedupe). |
-| `bun run verify-fixtures` | Checks bundled poll HTML vs parsers (Skyscanner: booking rows + prices; Kiwi: row prices). Can take ~1–2 minutes on large Skyscanner samples. |
+| `bun run verify-fixtures` | Checks bundled poll HTML vs parsers (Skyscanner + Kiwi). Can take ~1–2 minutes on large Skyscanner samples. |
 | `bun run demo` | Runs Skyscanner + Kiwi searches (`--real` hits production; default uses fake portal origin — see below). |
-| `bun run web` | Flight comparison **UI** + `POST /api/search` on **`WEB_PORT`** (default **3010**). Embeds static `/portal/*` fixtures on the same origin so scrapers do not need a separate fake server. |
+| `bun run web` | Flight UI + **`POST /api/search`** (live scrapes only) + **`GET /api/fixture-demo`** (frozen payload from `fixture.ts` for the demo button). |
 | `bun run serve` | Standalone Effect HTTP server serving sample portal routes only (`PORT`, default **3000**). Useful for CLI/tests without the web app. |
 
 ## Web UI
 
 - Open the URL logged by `bun run web` (e.g. `http://127.0.0.1:3010`).
-- Optional **Sources**: Skyscanner and/or Kiwi (checkboxes).
-- **Live** uses real FlightsFinder endpoints; **Local fixtures** uses HTML shipped in `skyscanner/samples/` and `kiwi/samples/` (served from the web process).
-- Successful responses are **merged in the browser** into a **single list**: trips ordered by **lowest best fare**, with all booking chips for that itinerary grouped on one card (including offers from both feeds when trip ids align). Failed feeds show as compact error strips above the combined results.
+- **Sources**: Skyscanner and/or Kiwi (checkboxes). **Search flights** always hits live FlightsFinder (`POST /api/search`).
+- **Load demo snapshot** loads the saved JSON export in **`fixture.ts`** via **`GET /api/fixture-demo`** (no scrape); it also aligns the form fields with that snapshot’s `input`. The first server start after install parses that file once (large snapshots can add several seconds).
+- Successful responses are **merged in the browser** into a **single list**: trips ordered by **lowest best fare**, with booking chips grouped per itinerary. Failed feeds show as compact error strips above the combined results.
 
 ## Scraping behavior (summary)
 
@@ -33,20 +33,28 @@ bun install
 - **Kiwi**: GET initial → POST search/poll → parse.
 - After parse, **`dedupeParsedDealsData`** collapses duplicate **ids** in flights, trips, legs, and deals (first wins) before returning `SearchResult` metadata counts.
 
+### Fake portal routes (`bun run serve` only)
+
+The **`bun run web`** process does **not** expose `/portal/*`. Use the standalone fake server for CLI/offline scrapes:
+
+- `GET /portal/sky`, `POST /portal/sky/poll`
+- `GET /portal/kiwi`, `POST /portal/kiwi/search`, `POST /portal/kiwi/poll`
+
 ## Environment variables
 
 | Variable | Used by | Notes |
 | --- | --- | --- |
-| `WEB_PORT` | `web/server.ts` | HTTP port for UI + API + embedded fixtures (default `3010`). Sets `FIXTURE_HTTP_ORIGIN` for scrapers running against this process. |
+| `WEB_PORT` | `web/server.ts` | HTTP port for UI + API (default `3010`). |
 | `PORT` | `bun run serve`, `utils.fakeServerPort` | Standalone fake portal port (default `3000`). |
-| `FIXTURE_HTTP_ORIGIN` | `utils.fakeServerOrigin` | When set (e.g. by `web/server.ts`), scrapers in fake mode target this origin instead of `127.0.0.1:$PORT`. |
+| `FIXTURE_HTTP_ORIGIN` | `utils.fakeServerOrigin` | When set, scrapers in **fake** mode target this origin instead of `127.0.0.1:$PORT` (e.g. set manually when pointing fake scrapes at another host). |
 | `FX_POLL_MAX_RETRIES` | `skyscanner/search.ts` | Max Skyscanner poll attempts (default `180`, 1s apart). |
 
 ## Layout
 
 - `skyscanner/`, `kiwi/` — config, HTTP requests, HTML extractors, `parseHtml`, `search.ts`, fake handlers.
-- `web/public/` — static UI (`app.js`, `index.html`, `styles.css`).
-- `fixturePortal.ts` — reads sample HTML and portal cookie headers for tests and servers.
+- `web/public/` — static UI (`app.ts` bundled to `/app.js`, `index.html`, `styles.css`).
+- `fixturePortal.ts` — reads sample HTML and portal cookie headers for tests and `bun run serve`.
+- `fixture.ts` — optional large demo snapshot (`export const fixture`) for **`GET /api/fixture-demo`** / UI button.
 - `scripts/demo.ts`, `scripts/verifyFixtures.ts` — CLI helpers.
 
 ## Legal / etiquette

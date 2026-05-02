@@ -1,6 +1,6 @@
 /**
- * Static HTML fixtures for Skyscanner / Kiwi portal flows (unit tests, embedded `/portal/*` on `web/server.ts`).
- * Poll consistency (header count vs modals vs parsed deals vs row prices): `bun run verify-fixtures`.
+ * Static fixtures for Skyscanner / Kiwi portal HTML flows (`web/server.ts`, `bun run serve`).
+ * Poll consistency: `bun run verify-fixtures`.
  */
 import { readFileSync } from "node:fs"
 import { join } from "node:path"

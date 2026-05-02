@@ -18,8 +18,8 @@
         <p class="mast-kicker">fx</p>
         <h1 class="mast-title">Flight compare</h1>
         <p class="mast-desc">
-          Compare Skyscanner and Kiwi results from FlightsFinder. Use <strong>three-letter airport codes</strong>. Live searches may take
-          a short while.
+          Compare Skyscanner and Kiwi.com (FlightsFinder) results. Use <strong>three-letter airport codes</strong>. Live searches may take a short
+          while.
         </p>
       </header>
 
@@ -96,22 +96,16 @@
               </div>
             </fieldset>
 
-            <fieldset class="fieldset">
-              <legend class="fieldset-legend">Data mode</legend>
-              <p class="fieldset-help">Sample HTML bundled with the app — no extra server. Use Live for real FlightsFinder data.</p>
-              <div class="radios">
-                <label class="radio">
-                  <input type="radio" name="mode" value="real" checked />
-                  <span>Live FlightsFinder</span>
-                </label>
-                <label class="radio">
-                  <input type="radio" name="mode" value="fake" />
-                  <span>Local fixtures <small>(offline sample data)</small></span>
-                </label>
-              </div>
-            </fieldset>
-
-            <button type="submit" class="submit" id="submit-btn" aria-busy="false">Search flights</button>
+            <div class="form-actions">
+              <button type="submit" class="submit" id="submit-btn" aria-busy="false">Search flights</button>
+              <button type="button" class="btn-secondary" id="load-fixture-demo" aria-busy="false">
+                Load demo snapshot
+              </button>
+            </div>
+            <p class="fixture-demo-hint">
+              Searches use live FlightsFinder data. <strong>Load demo snapshot</strong> fills the form with BER→SLP and shows frozen results from <code>fixture.ts</code>
+              (no network scrape).
+            </p>
           </form>
         </section>
 

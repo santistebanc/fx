@@ -2,6 +2,11 @@ import { Effect, DateTime, Schema, Data } from "effect"
 import * as cheerio from "cheerio"
 import { createHash } from "node:crypto"
 import { listItemPriceCents } from "../utils"
+import {
+  inferArrivalDateIsoFromPortalClocks,
+  inferNextLegDepartureDateIso,
+  parsePortalHeadingDate,
+} from "../flightScrapeDates"
 import { Deal, Flight, Leg, Trip, type ParsedDealsData } from "../schemas"
 
 export class ParseHtmlError extends Data.TaggedError("ParseHtmlError")<{
@@ -150,13 +155,24 @@ export const parseDealsFromHtml = (
       const providerSection = $modal.find('p._heading:contains("Book Your Ticket")').parent()
       const providerName = providerSection.find("._similar > div > p").first().text().trim() || "Kiwi.com"
 
-      // Extract all flights from outbound
       const outboundFlights: Flight[] = []
-      const outboundPanels = outboundPanel && outboundPanel.length > 0 
-        ? outboundPanel.find("._panel_body").toArray()
-        : outboundSection.find("._panel_body").toArray()
+      const outboundPanels =
+        outboundPanel && outboundPanel.length > 0
+          ? outboundPanel.find("._panel_body").toArray()
+          : outboundSection.find("._panel_body").toArray()
 
-      for (const panel of outboundPanels) {
+      const returnPanels =
+        returnSection.length > 0
+          ? returnPanel && returnPanel.length > 0
+            ? returnPanel.find("._panel_body").toArray()
+            : returnSection.find("._panel_body").toArray()
+          : []
+
+      let outboundPrevArrDate: string | null = null
+      let outboundPrevArrTime: string | null = null
+
+      for (let panelIndex = 0; panelIndex < outboundPanels.length; panelIndex++) {
+        const panel = outboundPanels[panelIndex]!
         const $panel = $(panel)
         const flightNumberText = $panel.find("._head small").text().trim()
         // Kiwi format: "Wizz Air Malta W4 3171" - extract airline and flight number
@@ -181,12 +197,29 @@ export const parseDealsFromHtml = (
 
         if (!departureTime || !arrivalTime || !originAirport || !destAirport) continue
 
-        // Calculate arrival date (same day for now, could be next day for long flights)
-        const arrivalDate = outboundDate
+        let departure_date = outboundDate
+        if (panelIndex > 0 && outboundPrevArrDate && outboundPrevArrTime) {
+          departure_date = inferNextLegDepartureDateIso({
+            prevArrivalDate: outboundPrevArrDate,
+            prevArrivalTime: outboundPrevArrTime,
+            nextDepartureTime: departureTime,
+          })
+        }
+
+        let arrival_date = inferArrivalDateIsoFromPortalClocks({
+          departure_date,
+          departure_time: departureTime,
+          arrival_time: arrivalTime,
+        })
+        const summaryArrival = parsePortalHeadingDate($panel.find("._summary span").first().text())
+        if (summaryArrival) arrival_date = summaryArrival
+
+        outboundPrevArrDate = arrival_date
+        outboundPrevArrTime = arrivalTime
 
         const duration = parseDuration(durationText)
 
-        const flightId = `${flightNumber.replace(/\s+/g, "_")}_${originAirport}_${outboundDate}_${departureTime.replace(":", "-")}`
+        const flightId = `${flightNumber.replace(/\s+/g, "_")}_${originAirport}_${departure_date}_${departureTime.replace(":", "-")}`
 
         const flightData = {
           id: flightId,
@@ -194,9 +227,9 @@ export const parseDealsFromHtml = (
           airline,
           origin: originAirport,
           destination: destAirport,
-          departure_date: outboundDate,
+          departure_date,
           departure_time: departureTime,
-          arrival_date: arrivalDate,
+          arrival_date,
           arrival_time: arrivalTime,
           duration,
           created_at: nowIso,
@@ -217,61 +250,78 @@ export const parseDealsFromHtml = (
         outboundFlights.push(flight)
       }
 
-      // Extract all flights from return
       const returnFlights: Flight[] = []
-      if (returnSection.length > 0) {
-        const returnPanels = returnPanel && returnPanel.length > 0
-          ? returnPanel.find("._panel_body").toArray()
-          : returnSection.find("._panel_body").toArray()
+      let returnPrevArrDate: string | null = null
+      let returnPrevArrTime: string | null = null
 
-        for (const panel of returnPanels) {
-          const $panel = $(panel)
-          const flightNumberText = $panel.find("._head small").text().trim()
-          // Kiwi format: "Wizz Air Malta W4 3171" - extract airline and flight number
-          // Last two words make up the flight_number (joined without space), rest is airline
-          const words = flightNumberText.split(/\s+/)
-          if (words.length < 3) continue // Need at least airline name + code + number
+      for (let panelIndex = 0; panelIndex < returnPanels.length; panelIndex++) {
+        const panel = returnPanels[panelIndex]!
+        const $panel = $(panel)
+        const flightNumberText = $panel.find("._head small").text().trim()
+        // Kiwi format: "Wizz Air Malta W4 3171" - extract airline and flight number
+        // Last two words make up the flight_number (joined without space), rest is airline
+        const words = flightNumberText.split(/\s+/)
+        if (words.length < 3) continue // Need at least airline name + code + number
 
-          const flightNumber = words.slice(-2).join("") // Last two words joined: "W43171"
-          const airline = words.slice(0, -2).join(" ") // All other words: "Wizz Air Malta"
+        const flightNumber = words.slice(-2).join("") // Last two words joined: "W43171"
+        const airline = words.slice(0, -2).join(" ") // All other words: "Wizz Air Malta"
 
-          const $item = $panel.find("._item")
-          const times = $item.find(".c3 p").toArray().map((el) => $(el).text().trim())
-          const airports = $item.find(".c4 p").toArray().map((el) => $(el).text().trim())
-          const durationText = $item.find(".c1 p").text().trim()
+        const $item = $panel.find("._item")
+        const times = $item.find(".c3 p").toArray().map((el) => $(el).text().trim())
+        const airports = $item.find(".c4 p").toArray().map((el) => $(el).text().trim())
+        const durationText = $item.find(".c1 p").text().trim()
 
-          if (times.length < 2 || airports.length < 2) continue
+        if (times.length < 2 || airports.length < 2) continue
 
-          const departureTime = times[0]
-          const arrivalTime = times[1]
-          const originAirport = airports[0]?.split(" ")[0]
-          const destAirport = airports[1]?.split(" ")[0]
+        const departureTime = times[0]
+        const arrivalTime = times[1]
+        const originAirport = airports[0]?.split(" ")[0]
+        const destAirport = airports[1]?.split(" ")[0]
 
-          if (!departureTime || !arrivalTime || !originAirport || !destAirport) continue
+        if (!departureTime || !arrivalTime || !originAirport || !destAirport) continue
 
-          const arrivalDate = returnDateParsed || outboundDate
-          const flightDate = returnDateParsed || outboundDate
+        const flightDateBase = returnDateParsed || outboundDate
 
-          const duration = parseDuration(durationText)
+        let departure_date = flightDateBase
+        if (panelIndex > 0 && returnPrevArrDate && returnPrevArrTime) {
+          departure_date = inferNextLegDepartureDateIso({
+            prevArrivalDate: returnPrevArrDate,
+            prevArrivalTime: returnPrevArrTime,
+            nextDepartureTime: departureTime,
+          })
+        }
 
-          const flightId = `${flightNumber.replace(/\s+/g, "_")}_${originAirport}_${flightDate}_${departureTime.replace(":", "-")}`
+        let arrival_date = inferArrivalDateIsoFromPortalClocks({
+          departure_date,
+          departure_time: departureTime,
+          arrival_time: arrivalTime,
+        })
+        const summaryArrival = parsePortalHeadingDate($panel.find("._summary span").first().text())
+        if (summaryArrival) arrival_date = summaryArrival
 
-          const flightData = {
-            id: flightId,
-            flight_number: flightNumber,
-            airline,
-            origin: originAirport,
-            destination: destAirport,
-            departure_date: flightDate,
-            departure_time: departureTime,
-            arrival_date: arrivalDate,
-            arrival_time: arrivalTime,
-            duration,
-            created_at: nowIso,
-          }
+        returnPrevArrDate = arrival_date
+        returnPrevArrTime = arrivalTime
 
-          // Validate and decode flight using schema
-          const flight = yield* Schema.decodeUnknown(Flight)(flightData).pipe(
+        const duration = parseDuration(durationText)
+
+        const flightId = `${flightNumber.replace(/\s+/g, "_")}_${originAirport}_${departure_date}_${departureTime.replace(":", "-")}`
+
+        const flightData = {
+          id: flightId,
+          flight_number: flightNumber,
+          airline,
+          origin: originAirport,
+          destination: destAirport,
+          departure_date,
+          departure_time: departureTime,
+          arrival_date,
+          arrival_time: arrivalTime,
+          duration,
+          created_at: nowIso,
+        }
+
+        // Validate and decode flight using schema
+        const flight = yield* Schema.decodeUnknown(Flight)(flightData).pipe(
           Effect.mapError(
             (error) =>
               new ParseHtmlError({
@@ -281,9 +331,8 @@ export const parseDealsFromHtml = (
               })
           )
         )
-          flights.push(flight)
-          returnFlights.push(flight)
-        }
+        flights.push(flight)
+        returnFlights.push(flight)
       }
 
       // Generate trip ID from sorted flight IDs

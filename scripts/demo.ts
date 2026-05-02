@@ -52,9 +52,7 @@ const program = Effect.gen(function* () {
     )
   } else {
     yield* Console.log("Using https://www.flightsfinder.com")
-    yield* Console.log(
-      "Production note: Kiwi uses POST /portal/kiwi/search (not …/poll). Skyscanner uses POST /portal/sky/poll.\n"
-    )
+    yield* Console.log("Production note: Kiwi uses POST /portal/kiwi/search (not …/poll). Skyscanner uses POST /portal/sky/poll.\n")
   }
 
   const sky = yield* (useReal ? skyReal(input) : skyFake(input)).pipe(Effect.either)

@@ -1,4 +1,4 @@
-import { HttpClientResponse } from "@effect/platform"
+import { Cookies, HttpClientResponse } from "@effect/platform"
 
 /** Port for standalone `bun run serve` fake portal (`PORT`, default 3000). */
 export const fakeServerPort = (): number => {
@@ -84,53 +84,32 @@ export const splitPortalPollHeaderAndHtml = (
 }
 
 /**
- * Extracts cookies from Set-Cookie headers
+ * Serialize cookies from the response into a `Cookie` request header.
+ * Prefer Effect `response.cookies` so multiple `Set-Cookie` lines parse correctly.
  */
-export const extractCookies = (response: HttpClientResponse.HttpClientResponse): string => {
-  const setCookieHeaders = response.headers["set-cookie"]
-  if (!setCookieHeaders) {
-    return ""
-  }
-  
-  const headersArray = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders]
-  
-  return headersArray
-    .filter((cookie): cookie is string => typeof cookie === "string")
-    .map((cookie) => {
-      // Extract just the name=value part (before the first semicolon)
-      const match = cookie.match(/^([^;]+)/)
-      return match ? match[1] : cookie
-    })
-    .join("; ")
-}
+export const extractCookies = (response: HttpClientResponse.HttpClientResponse): string =>
+  Cookies.toCookieHeader(response.cookies)
 
 /**
  * Parses cookies from a cookie string and merges with new cookies
  */
 export const mergeCookies = (existing: string, newCookies: string): string => {
   const cookieMap = new Map<string, string>()
-  
-  // Parse existing cookies
-  if (existing) {
-    existing.split("; ").forEach((cookie) => {
-      const [name, value] = cookie.split("=", 2)
-      if (name && value) {
-        cookieMap.set(name.trim(), value.trim())
-      }
+
+  const parseChunk = (header: string) => {
+    if (!header) return
+    header.split("; ").forEach((cookie) => {
+      const eq = cookie.indexOf("=")
+      if (eq === -1) return
+      const name = cookie.slice(0, eq).trim()
+      const value = cookie.slice(eq + 1).trim()
+      if (name) cookieMap.set(name, value)
     })
   }
-  
-  // Parse and merge new cookies
-  if (newCookies) {
-    newCookies.split("; ").forEach((cookie) => {
-      const [name, value] = cookie.split("=", 2)
-      if (name && value) {
-        cookieMap.set(name.trim(), value.trim())
-      }
-    })
-  }
-  
-  // Rebuild cookie string
+
+  parseChunk(existing)
+  parseChunk(newCookies)
+
   return Array.from(cookieMap.entries())
     .map(([name, value]) => `${name}=${value}`)
     .join("; ")

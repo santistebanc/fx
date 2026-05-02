@@ -226,14 +226,15 @@ test("parseDealsFromHtml parses data from oneway-trip with literal values", asyn
     expect(flight.flight_number).toBe("W43171") // From "Wizz Air Malta W4 3171" in modal (last two words joined)
     expect(flight.origin).toBe("OTP") // From "OTP Bucharest"
     expect(flight.destination).toBe("MAD") // From "MAD Madrid"
-    expect(flight.departure_date).toBe("2026-02-01")
+    // Overnight connection: first leg arrives same day 19:40; second departs 06:45 → next calendar day
+    expect(flight.departure_date).toBe("2026-02-02")
     expect(flight.departure_time).toBe("06:45")
-    expect(flight.arrival_date).toBe("2026-02-01")
+    expect(flight.arrival_date).toBe("2026-02-02")
     expect(flight.arrival_time).toBe("09:45")
     expect(flight.duration).toBe(240) // 4h = 240 minutes
     
     // Check id format (no spaces in flightNumber)
-    expect(flight.id).toBe("W43171_OTP_2026-02-01_06-45")
+    expect(flight.id).toBe("W43171_OTP_2026-02-02_06-45")
     
     // Check timestamps are valid ISO format
     expect(flight.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
@@ -262,7 +263,7 @@ test("parseDealsFromHtml parses data from oneway-trip with literal values", asyn
       expect(leg.trip).toBe(trip.id)
       expect(leg.inbound).toBe(false)
       expect(leg.order).toBe(1) // Second leg
-      expect(leg.flight).toBe("W43171_OTP_2026-02-01_06-45") // Second outbound flight
+      expect(leg.flight).toBe("W43171_OTP_2026-02-02_06-45") // Second outbound flight
       expect(leg.id).toBe(`${trip.id}_outbound_${leg.flight}`) // Correct ID format
       expect(leg.connection_time).toBe(null) // Last leg has no connection time
       expect(leg.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)

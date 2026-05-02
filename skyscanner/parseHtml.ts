@@ -2,6 +2,13 @@ import { Effect, DateTime, Schema, Data } from "effect"
 import * as cheerio from "cheerio"
 import { createHash } from "node:crypto"
 import { euroDisplayTextToCents, listItemPriceCents } from "../utils"
+import {
+  inferArrivalDateIsoFromPortalClocks,
+  inferNextLegDepartureDateIso,
+  parsePortalHeadingDate,
+  splitLocalIsoDateTime,
+} from "../flightScrapeDates"
+import { parseSkyscannerItineraryFromBookingHref } from "./itineraryBooking"
 import { Deal, Flight, Leg, Trip } from "../schemas"
 
 export class ParseHtmlError extends Data.TaggedError("ParseHtmlError")<{
@@ -143,13 +150,36 @@ export const parseDealsFromHtml = (
         }
       }
 
-      // Extract all flights from outbound
       const outboundFlights: Flight[] = []
-      const outboundPanels = outboundPanel && outboundPanel.length > 0 
-        ? outboundPanel.find("._panel_body").toArray()
-        : outboundSection.find("._panel_body").toArray()
+      const outboundPanels =
+        outboundPanel && outboundPanel.length > 0
+          ? outboundPanel.find("._panel_body").toArray()
+          : outboundSection.find("._panel_body").toArray()
 
-      for (const panel of outboundPanels) {
+      const returnPanels =
+        returnSection.length > 0
+          ? returnPanel && returnPanel.length > 0
+            ? returnPanel.find("._panel_body").toArray()
+            : returnSection.find("._panel_body").toArray()
+          : []
+
+      const bookingHref =
+        $modal.find('._similar a[href*="itinerary"], ._similar a[href*="pageUrl"]').first().attr("href")?.trim() ||
+        rowFallbackLink
+
+      const itineraryFull = bookingHref ? parseSkyscannerItineraryFromBookingHref(bookingHref) : null
+      let itineraryOutbound: NonNullable<typeof itineraryFull> | null = null
+      let itineraryReturn: NonNullable<typeof itineraryFull> | null = null
+      if (itineraryFull && itineraryFull.length === outboundPanels.length + returnPanels.length) {
+        itineraryOutbound = itineraryFull.slice(0, outboundPanels.length)
+        itineraryReturn = returnPanels.length > 0 ? itineraryFull.slice(outboundPanels.length) : []
+      }
+
+      let outboundPrevArrDate: string | null = null
+      let outboundPrevArrTime: string | null = null
+
+      for (let panelIndex = 0; panelIndex < outboundPanels.length; panelIndex++) {
+        const panel = outboundPanels[panelIndex]!
         const $panel = $(panel)
         const flightNumberText = $panel.find("._head small").text().trim()
         // Skyscanner format: "KLM KL1770" - extract airline and flight number
@@ -174,12 +204,45 @@ export const parseDealsFromHtml = (
 
         if (!departureTime || !arrivalTime || !originAirport || !destAirport) continue
 
-        // Calculate arrival date (same day for now, could be next day for long flights)
-        const arrivalDate = outboundDate
+        const itinLeg = itineraryOutbound?.[panelIndex]
 
-        const duration = parseDuration(durationText)
+        let departure_date = outboundDate
+        let departure_time = departureTime
+        let arrival_time = arrivalTime
+        let duration = parseDuration(durationText)
+        let arrival_date = outboundDate
 
-        const flightId = `${flightNumber.replace(/\s+/g, "_")}_${originAirport}_${outboundDate}_${departureTime.replace(":", "-")}`
+        if (itinLeg) {
+          const depIso = splitLocalIsoDateTime(itinLeg.departureIso)
+          const arrIso = splitLocalIsoDateTime(itinLeg.arrivalIso)
+          if (depIso && arrIso) {
+            departure_date = depIso.date
+            departure_time = depIso.time
+            arrival_date = arrIso.date
+            arrival_time = arrIso.time
+            duration = itinLeg.durationMinutes
+          }
+        } else {
+          if (panelIndex > 0 && outboundPrevArrDate && outboundPrevArrTime) {
+            departure_date = inferNextLegDepartureDateIso({
+              prevArrivalDate: outboundPrevArrDate,
+              prevArrivalTime: outboundPrevArrTime,
+              nextDepartureTime: departureTime,
+            })
+          }
+          arrival_date = inferArrivalDateIsoFromPortalClocks({
+            departure_date,
+            departure_time: departureTime,
+            arrival_time: arrivalTime,
+          })
+          const summaryArrival = parsePortalHeadingDate($panel.find("._summary span").first().text())
+          if (summaryArrival) arrival_date = summaryArrival
+        }
+
+        outboundPrevArrDate = arrival_date
+        outboundPrevArrTime = arrival_time
+
+        const flightId = `${flightNumber.replace(/\s+/g, "_")}_${originAirport}_${departure_date}_${departure_time.replace(":", "-")}`
 
         const flightData = {
           id: flightId,
@@ -187,10 +250,10 @@ export const parseDealsFromHtml = (
           airline,
           origin: originAirport,
           destination: destAirport,
-          departure_date: outboundDate,
-          departure_time: departureTime,
-          arrival_date: arrivalDate,
-          arrival_time: arrivalTime,
+          departure_date,
+          departure_time,
+          arrival_date,
+          arrival_time,
           duration,
           created_at: nowIso,
         }
@@ -210,73 +273,104 @@ export const parseDealsFromHtml = (
         outboundFlights.push(flight)
       }
 
-      // Extract all flights from return
       const returnFlights: Flight[] = []
-      if (returnSection.length > 0) {
-        const returnPanels = returnPanel && returnPanel.length > 0
-          ? returnPanel.find("._panel_body").toArray()
-          : returnSection.find("._panel_body").toArray()
+      let returnPrevArrDate: string | null = null
+      let returnPrevArrTime: string | null = null
 
-        for (const panel of returnPanels) {
-          const $panel = $(panel)
-          const flightNumberText = $panel.find("._head small").text().trim()
-          // Skyscanner format: "KLM KL1770" - extract airline and flight number
-          // Last word is the flight_number, rest is the airline
-          const words = flightNumberText.split(/\s+/)
-          if (words.length < 2) continue // Need at least airline + flight number
+      for (let panelIndex = 0; panelIndex < returnPanels.length; panelIndex++) {
+        const panel = returnPanels[panelIndex]!
+        const $panel = $(panel)
+        const flightNumberText = $panel.find("._head small").text().trim()
+        // Skyscanner format: "KLM KL1770" - extract airline and flight number
+        // Last word is the flight_number, rest is the airline
+        const words = flightNumberText.split(/\s+/)
+        if (words.length < 2) continue // Need at least airline + flight number
 
-          const flightNumber = words[words.length - 1] || "" // Last word: "KL1770"
-          const airline = words.slice(0, -1).join(" ") // All other words: "KLM"
+        const flightNumber = words[words.length - 1] || "" // Last word: "KL1770"
+        const airline = words.slice(0, -1).join(" ") // All other words: "KLM"
 
-          const $item = $panel.find("._item")
-          const times = $item.find(".c3 p").toArray().map((el) => $(el).text().trim())
-          const airports = $item.find(".c4 p").toArray().map((el) => $(el).text().trim())
-          const durationText = $item.find(".c1 p").text().trim()
+        const $item = $panel.find("._item")
+        const times = $item.find(".c3 p").toArray().map((el) => $(el).text().trim())
+        const airports = $item.find(".c4 p").toArray().map((el) => $(el).text().trim())
+        const durationText = $item.find(".c1 p").text().trim()
 
-          if (times.length < 2 || airports.length < 2) continue
+        if (times.length < 2 || airports.length < 2) continue
 
-          const departureTime = times[0]
-          const arrivalTime = times[1]
-          const originAirport = airports[0]?.split(" ")[0]
-          const destAirport = airports[1]?.split(" ")[0]
+        const departureTime = times[0]
+        const arrivalTime = times[1]
+        const originAirport = airports[0]?.split(" ")[0]
+        const destAirport = airports[1]?.split(" ")[0]
 
-          if (!departureTime || !arrivalTime || !originAirport || !destAirport) continue
+        if (!departureTime || !arrivalTime || !originAirport || !destAirport) continue
 
-          const arrivalDate = returnDateParsed || outboundDate
-          const flightDate = returnDateParsed || outboundDate
+        const flightDateBase = returnDateParsed || outboundDate
+        const itinLeg = itineraryReturn?.[panelIndex]
 
-          const duration = parseDuration(durationText)
+        let departure_date = flightDateBase
+        let departure_time = departureTime
+        let arrival_time = arrivalTime
+        let duration = parseDuration(durationText)
+        let arrival_date = flightDateBase
 
-          const flightId = `${flightNumber.replace(/\s+/g, "_")}_${originAirport}_${flightDate}_${departureTime.replace(":", "-")}`
-
-          const flightData = {
-            id: flightId,
-            flight_number: flightNumber,
-            airline,
-            origin: originAirport,
-            destination: destAirport,
-            departure_date: flightDate,
-            departure_time: departureTime,
-            arrival_date: arrivalDate,
-            arrival_time: arrivalTime,
-            duration,
-            created_at: nowIso,
+        if (itinLeg) {
+          const depIso = splitLocalIsoDateTime(itinLeg.departureIso)
+          const arrIso = splitLocalIsoDateTime(itinLeg.arrivalIso)
+          if (depIso && arrIso) {
+            departure_date = depIso.date
+            departure_time = depIso.time
+            arrival_date = arrIso.date
+            arrival_time = arrIso.time
+            duration = itinLeg.durationMinutes
           }
-
-          // Validate and decode flight using schema
-          const flight = yield* Schema.decodeUnknown(Flight)(flightData).pipe(
-            Effect.mapError(
-              (error) =>
-                new ParseHtmlError({
-                  cause: error,
-                  html: resultsHtml,
-                  message: `Failed to parse HTML: ${error instanceof Error ? error.message : String(error)}`,
-                })
-            )
-          )
-          flights.push(flight)
-          returnFlights.push(flight)
+        } else {
+          if (panelIndex > 0 && returnPrevArrDate && returnPrevArrTime) {
+            departure_date = inferNextLegDepartureDateIso({
+              prevArrivalDate: returnPrevArrDate,
+              prevArrivalTime: returnPrevArrTime,
+              nextDepartureTime: departureTime,
+            })
+          }
+          arrival_date = inferArrivalDateIsoFromPortalClocks({
+            departure_date,
+            departure_time: departureTime,
+            arrival_time: arrivalTime,
+          })
+          const summaryArrival = parsePortalHeadingDate($panel.find("._summary span").first().text())
+          if (summaryArrival) arrival_date = summaryArrival
         }
+
+        returnPrevArrDate = arrival_date
+        returnPrevArrTime = arrival_time
+
+        const flightId = `${flightNumber.replace(/\s+/g, "_")}_${originAirport}_${departure_date}_${departure_time.replace(":", "-")}`
+
+        const flightData = {
+          id: flightId,
+          flight_number: flightNumber,
+          airline,
+          origin: originAirport,
+          destination: destAirport,
+          departure_date,
+          departure_time,
+          arrival_date,
+          arrival_time,
+          duration,
+          created_at: nowIso,
+        }
+
+        // Validate and decode flight using schema
+        const flight = yield* Schema.decodeUnknown(Flight)(flightData).pipe(
+          Effect.mapError(
+            (error) =>
+              new ParseHtmlError({
+                cause: error,
+                html: resultsHtml,
+                message: `Failed to parse HTML: ${error instanceof Error ? error.message : String(error)}`,
+              })
+          )
+        )
+        flights.push(flight)
+        returnFlights.push(flight)
       }
 
       // Generate trip ID from sorted flight IDs
