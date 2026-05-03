@@ -14,19 +14,8 @@
   </head>
   <body>
     <div class="shell">
-      <header class="mast">
-        <p class="mast-kicker">fx</p>
-        <h1 class="mast-title">Flight compare</h1>
-        <p class="mast-desc">
-          Compare Skyscanner and Kiwi.com (FlightsFinder) results. Use <strong>three-letter airport codes</strong>. Live searches may take a short
-          while.
-        </p>
-      </header>
-
       <main class="layout">
-        <section class="panel form-panel" aria-labelledby="search-heading">
-          <h2 id="search-heading" class="panel-title">Search</h2>
-          <p class="panel-lede">Adjust routes and dates, then load offers. The search box stays visible while you browse results on wide screens.</p>
+        <section class="panel form-panel" aria-label="Search">
           <form id="search-form" class="form" novalidate>
             <div class="field-row">
               <label class="field">
@@ -102,17 +91,11 @@
                 Load demo snapshot
               </button>
             </div>
-            <p class="fixture-demo-hint">
-              Searches use live FlightsFinder data. <strong>Load demo snapshot</strong> fills the form with BER→SLP and shows frozen results from <code>fixture.ts</code>
-              (no network scrape).
-            </p>
           </form>
         </section>
 
-        <section class="panel results-panel" aria-labelledby="results-heading" id="results-panel">
-          <h2 id="results-heading" class="panel-title">Results</h2>
-          <p id="results-overview" class="results-overview hidden" hidden></p>
-          <p id="results-placeholder" class="placeholder">Run a search to see trips and prices. Selected feeds are merged and sorted by cheapest trip first.</p>
+        <section class="panel results-panel" aria-label="Results" id="results-panel">
+          <p id="results-placeholder" class="placeholder">Run a search to load results.</p>
           <div id="results-status" class="results-status sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
           <div id="results-root" class="results-root hidden" hidden></div>
           <p id="results-error" class="error-banner hidden" role="alert" hidden></p>
