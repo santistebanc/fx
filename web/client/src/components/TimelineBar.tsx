@@ -11,39 +11,44 @@ function fmtDur(minutes: number): string {
 
 type Seg = { type: "flight"; index: number; leftPct: number; widthPct: number; flight: UiFlight }
 
-function buildTimelineSegs(flights: UiFlight[]): { segs: Seg[]; totalMin: number } {
-  const totalMin = flights.reduce((acc, fl, i) =>
-    acc + fl.dur + (i < flights.length - 1 && fl.conn ? fl.conn : 0), 0)
+type TimelineRange = { start: number; end: number }
+
+function buildTimelineSegs(flights: UiFlight[], range: TimelineRange): { segs: Seg[]; totalMin: number } {
+  const totalMin = Math.max(1, (range.end - range.start) / 60000)
 
   const segs: Seg[] = []
-  let cursor = 0
   flights.forEach((fl, i) => {
-    const leftPct = (cursor / totalMin) * 100
-    const widthPct = (fl.dur / totalMin) * 100
+    const leftPct = ((fl.depAt - range.start) / 60000 / totalMin) * 100
+    const widthPct = ((fl.arrAt - fl.depAt) / 60000 / totalMin) * 100
     segs.push({ type: "flight", index: i, leftPct, widthPct, flight: fl })
-    cursor += fl.dur
-    if (i < flights.length - 1 && fl.conn && fl.conn > 0) {
-      cursor += fl.conn
-    }
   })
   return { segs, totalMin }
 }
 
 type Boundary = { pct: number; time: string; isFirst: boolean; isLast: boolean; which: "dep" | "arr" }
 
-export function TimelineBar({ flights, showLegs = true }: { flights: UiFlight[]; showLegs?: boolean }) {
-  const { segs, totalMin } = buildTimelineSegs(flights)
+export function TimelineBar({
+  flights,
+  showLegs = true,
+  range,
+}: {
+  flights: UiFlight[]
+  showLegs?: boolean
+  range?: TimelineRange
+}) {
+  const fallbackRange = flights.length > 0
+    ? { start: flights[0].depAt, end: flights[flights.length - 1].arrAt }
+    : { start: 0, end: 1 }
+  const timelineRange = range ?? fallbackRange
+  const { segs, totalMin } = buildTimelineSegs(flights, timelineRange)
   const [legsExpanded, setLegsExpanded] = useState(false)
 
   const boundaries: Boundary[] = []
-  let cursor = 0
   flights.forEach((fl, i) => {
-    const depPct = (cursor / totalMin) * 100
+    const depPct = ((fl.depAt - timelineRange.start) / 60000 / totalMin) * 100
     boundaries.push({ pct: depPct, time: fl.dep, isFirst: i === 0, isLast: false, which: "dep" })
-    cursor += fl.dur
-    const arrPct = (cursor / totalMin) * 100
+    const arrPct = ((fl.arrAt - timelineRange.start) / 60000 / totalMin) * 100
     boundaries.push({ pct: arrPct, time: fl.arr, isFirst: false, isLast: i === flights.length - 1, which: "arr" })
-    if (i < flights.length - 1 && fl.conn) cursor += fl.conn
   })
 
   const aboveTimes = boundaries.filter(b => b.which === "dep")
@@ -71,6 +76,7 @@ export function TimelineBar({ flights, showLegs = true }: { flights: UiFlight[];
             ))}
             {segs.map((seg) => {
               const fl = seg.flight
+              const isFirstFlight = seg.index === 0
               const isLastFlight = seg.index === flights.length - 1
               return (
                 <div
@@ -79,7 +85,7 @@ export function TimelineBar({ flights, showLegs = true }: { flights: UiFlight[];
                   style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%` }}
                   title={`${fl.from}→${fl.to}  ${fl.dep}–${fl.arr}  ${fmtDur(fl.dur)}`}
                 >
-                  <span className="t-seg-iata t-seg-iata--left">{fl.from}</span>
+                  {isFirstFlight && <span className="t-seg-iata t-seg-iata--left">{fl.from}</span>}
                   {isLastFlight && <span className="t-seg-iata t-seg-iata--right">{fl.to}</span>}
                 </div>
               )

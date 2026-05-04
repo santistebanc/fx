@@ -3,6 +3,8 @@ export type UiFlight = {
   to: string
   dep: string
   arr: string
+  depAt: number
+  arrAt: number
   airline: string
   fn: string
   dur: number
@@ -25,6 +27,7 @@ export type UiDeal = {
 export type UiTrip = {
   id: string
   price: number
+  score: number
   currency: string
   deals: UiDeal[]
   outbound: UiItinerary
@@ -71,6 +74,10 @@ function fmtDate(iso: string): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+function toUtcMillis(date: string, time: string): number {
+  return Date.parse(`${date}T${time}:00Z`)
+}
+
 function normalizeBlocks(payload: ApiPayload): SourceBlock[] {
   if (payload.sources) {
     return payload.sources
@@ -81,6 +88,27 @@ function normalizeBlocks(payload: ApiPayload): SourceBlock[] {
     return [{ deals: payload.data.deals ?? [], legs: payload.data.legs ?? [], flights: payload.data.flights ?? [] }]
   }
   return []
+}
+
+function matchesRequestedDates(
+  outLegs: ApiLeg[],
+  inLegs: ApiLeg[],
+  flightsById: Map<string, ApiFlight>,
+  input?: ApiPayload["input"],
+): boolean {
+  if (!input?.departureDate) return true
+
+  const firstOutbound = outLegs.length > 0 ? flightsById.get(outLegs[0]!.flight) : undefined
+  if (!firstOutbound || firstOutbound.departure_date !== input.departureDate) {
+    return false
+  }
+
+  if (!input.returnDate) {
+    return true
+  }
+
+  const firstInbound = inLegs.length > 0 ? flightsById.get(inLegs[0]!.flight) : undefined
+  return Boolean(firstInbound && firstInbound.departure_date === input.returnDate)
 }
 
 export function transformApiResponse(payload: ApiPayload): UiTrip[] {
@@ -111,6 +139,8 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
     const outLegs = legs.filter(l => !l.inbound).sort((a, b) => a.order - b.order)
     const inLegs  = legs.filter(l =>  l.inbound).sort((a, b) => a.order - b.order)
 
+    if (!matchesRequestedDates(outLegs, inLegs, flightsById, payload.input)) continue
+
     const buildItin = (legSet: ApiLeg[]): UiItinerary | null => {
       if (legSet.length === 0) return null
       const uiFlights: UiFlight[] = []
@@ -123,6 +153,8 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
           to: f.destination,
           dep: f.departure_time.slice(0, 5),
           arr: overnight ? `${f.arrival_time.slice(0, 5)}+1` : f.arrival_time.slice(0, 5),
+          depAt: toUtcMillis(f.departure_date, f.departure_time.slice(0, 5)),
+          arrAt: toUtcMillis((f.arrival_date || f.departure_date), f.arrival_time.slice(0, 5)),
           airline: f.airline,
           fn: f.flight_number,
           dur: f.duration,
@@ -145,6 +177,9 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
     const outboundStops = Math.max(0, outbound.flights.length - 1)
     const returnStops = inbound ? Math.max(0, inbound.flights.length - 1) : 0
     const stops = outboundStops + returnStops
+    const directionCount = inbound ? 2 : 1
+    const avgDuration = Math.round((outbound.duration + (inbound?.duration ?? 0)) / directionCount)
+    const avgLayover = Math.round((outbound.layover + (inbound?.layover ?? 0)) / directionCount)
 
     trips.push({
       id: tripId,
@@ -154,9 +189,9 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
       outbound,
       inbound,
       stats: {
-        duration: outbound.duration + (inbound?.duration ?? 0),
+        duration: avgDuration,
         stops,
-        layover: outbound.layover + (inbound?.layover ?? 0),
+        layover: avgLayover,
       },
     })
   }
@@ -174,13 +209,18 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
   const medS = med(trips.map(t => t.stats.stops))
   const medL = med(trips.map(t => t.stats.layover))
 
-  const norm = (v: number, median: number) => median === 0 ? 1 : v / median
+  const norm = (v: number, median: number) => median === 0 ? 0 : v / median
+  const penaltyBase = medP
 
-  const score = (t: UiTrip) =>
-    0.60 * norm(t.price,          medP) +
-    0.20 * norm(t.stats.duration, medD) +
-    0.10 * norm(t.stats.stops,    medS) +
-    0.10 * norm(t.stats.layover,  medL)
+  const score = (t: Omit<UiTrip, "score">) =>
+    t.price +
+    penaltyBase * (
+      0.20 * norm(t.stats.duration, medD) +
+      0.10 * norm(t.stats.stops,    medS) +
+      0.10 * norm(t.stats.layover,  medL)
+    )
 
-  return trips.sort((a, b) => score(a) - score(b))
+  return trips
+    .map((trip) => ({ ...trip, score: score(trip) }))
+    .sort((a, b) => a.score - b.score)
 }

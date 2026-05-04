@@ -1,4 +1,4 @@
-import { Effect, Duration, DateTime, Data } from "effect"
+import { Effect, Duration, DateTime, Data, Either } from "effect"
 import { HttpClient } from "@effect/platform"
 import { dedupeParsedDealsData, type SearchInput, type SearchResult } from "../schemas"
 import { buildSearchUrl } from "./buildUrl"
@@ -18,10 +18,10 @@ const log = (phase: string, detail?: Record<string, unknown>) => {
   else console.log(`[fx scrape skyscanner] ${phase}`, detail)
 }
 
-/** Poll until portal reports finished; override with FX_POLL_MAX_RETRIES (default 180 attempts, 1s apart). */
+/** Poll until portal reports finished; override with FX_POLL_MAX_RETRIES (default 5 attempts, 1s apart). */
 const defaultPollMaxRetries = (): number => {
   const n = Number(process.env.FX_POLL_MAX_RETRIES)
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 180
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 5
 }
 
 const pollUntilFinished = (
@@ -37,27 +37,50 @@ const pollUntilFinished = (
   Effect.gen(function* () {
     let currentCookies = cookies
     let retries = 0
-    let pollData: PollData | null = null
+    let lastGood: { pollData: PollData; cookies: string } | null = null
 
     while (retries < maxRetries) {
       const attempt = retries + 1
       log(`poll attempt ${attempt}/${maxRetries}`)
-      const result = yield* makePollRequest(initialData, currentCookies, searchUrl, attempt)
-      pollData = result.pollData
-      currentCookies = result.cookies
+      const outcome = yield* Effect.either(
+        makePollRequest(initialData, currentCookies, searchUrl, attempt)
+      )
 
-      log(`poll ${attempt} response`, {
-        finished: pollData.finished,
-        resultsHtmlChars: pollData.resultsHtml?.length ?? 0,
-      })
+      if (Either.isRight(outcome)) {
+        const result = outcome.right
+        lastGood = { pollData: result.pollData, cookies: result.cookies }
+        currentCookies = result.cookies
+        const { pollData } = result
 
-      if (pollData.finished) {
-        log(`poll finished after ${attempt} attempt(s)`)
-        return { pollData, cookies: currentCookies, retries }
+        log(`poll ${attempt} response`, {
+          finished: pollData.finished,
+          resultsHtmlChars: pollData.resultsHtml?.length ?? 0,
+        })
+
+        if (pollData.finished) {
+          log(`poll finished after ${attempt} attempt(s)`)
+          return { pollData, cookies: currentCookies, retries }
+        }
+
+        yield* Effect.sleep(Duration.seconds(1))
+        retries++
+        continue
       }
 
-      yield* Effect.sleep(Duration.seconds(1))
-      retries++
+      const err = outcome.left
+      if (lastGood !== null) {
+        log(
+          `poll attempt ${attempt} failed; using last successful poll (finished=${lastGood.pollData.finished})`,
+          { message: err.message }
+        )
+        return {
+          pollData: lastGood.pollData,
+          cookies: lastGood.cookies,
+          retries,
+        }
+      }
+
+      return yield* Effect.fail(err)
     }
 
     return yield* Effect.fail(

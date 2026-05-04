@@ -51,21 +51,71 @@ type ApiBody = {
   sources?: unknown
 }
 
-/** Trips / legs / flights referenced by all scraped deals for this source. */
-const filterGraphForDeals = (
-  full: SearchResult,
-  deals: SearchResult["data"]["deals"]
-): {
-  trips: SearchResult["data"]["trips"]
-  legs: SearchResult["data"]["legs"]
-  flights: SearchResult["data"]["flights"]
-} => {
-  const tripIds = new Set(deals.map((d) => d.trip))
-  const trips = full.data.trips.filter((t) => tripIds.has(t.id))
-  const legs = full.data.legs.filter((l) => tripIds.has(l.trip))
+type DealRow = { trip: string }
+type TripRow = { id: string }
+type LegRow = { trip: string; inbound: boolean; order: number; flight: string }
+type FlightRow = { id: string; departure_date: string }
+
+type SourceGraph<
+  TDeal extends DealRow = DealRow,
+  TTrip extends TripRow = TripRow,
+  TLeg extends LegRow = LegRow,
+  TFlight extends FlightRow = FlightRow,
+> = {
+  deals: TDeal[]
+  trips: TTrip[]
+  legs: TLeg[]
+  flights: TFlight[]
+}
+
+const tripDepartsOnRequestedDates = (
+  tripId: string,
+  legs: LegRow[],
+  flightsById: Map<string, FlightRow>,
+  input: SearchInput,
+): boolean => {
+  const tripLegs = legs.filter((leg) => leg.trip === tripId)
+  const outboundLegs = tripLegs
+    .filter((leg) => !leg.inbound)
+    .sort((a, b) => a.order - b.order)
+  const firstOutboundFlight = outboundLegs.length > 0 ? flightsById.get(outboundLegs[0]!.flight) : undefined
+  if (!firstOutboundFlight || firstOutboundFlight.departure_date !== input.departureDate) {
+    return false
+  }
+
+  if (!input.returnDate) {
+    return true
+  }
+
+  const inboundLegs = tripLegs
+    .filter((leg) => leg.inbound)
+    .sort((a, b) => a.order - b.order)
+  const firstInboundFlight = inboundLegs.length > 0 ? flightsById.get(inboundLegs[0]!.flight) : undefined
+  return Boolean(firstInboundFlight && firstInboundFlight.departure_date === input.returnDate)
+}
+
+const filterSourceGraphByRequestedDates = <
+  TDeal extends DealRow,
+  TTrip extends TripRow,
+  TLeg extends LegRow,
+  TFlight extends FlightRow,
+>(
+  graph: SourceGraph<TDeal, TTrip, TLeg, TFlight>,
+  input: SearchInput,
+): SourceGraph<TDeal, TTrip, TLeg, TFlight> => {
+  const flightsById = new Map(graph.flights.map((flight) => [flight.id, flight] as const))
+  const validTripIds = new Set(
+    graph.trips
+      .filter((trip) => tripDepartsOnRequestedDates(trip.id, graph.legs, flightsById, input))
+      .map((trip) => trip.id)
+  )
+
+  const deals = graph.deals.filter((deal) => validTripIds.has(deal.trip))
+  const trips = graph.trips.filter((trip) => validTripIds.has(trip.id))
+  const legs = graph.legs.filter((leg) => validTripIds.has(leg.trip))
   const flightIds = new Set(legs.map((l) => l.flight))
-  const flights = full.data.flights.filter((f) => flightIds.has(f.id))
-  return { trips, legs, flights }
+  const flights = graph.flights.filter((flight) => flightIds.has(flight.id))
+  return { deals, trips, legs, flights }
 }
 
 const formatLeft = (left: unknown): string => {
@@ -87,6 +137,7 @@ const runSource = async (
       ok: true
       source: SourceKey
       result: SearchResult
+      deals: SearchResult["data"]["deals"]
       trips: SearchResult["data"]["trips"]
       legs: SearchResult["data"]["legs"]
       flights: SearchResult["data"]["flights"]
@@ -106,10 +157,11 @@ const runSource = async (
   const elapsedMs = Date.now() - t0
   if (out._tag === "Right") {
     const full = out.right
-    const graph = filterGraphForDeals(full, full.data.deals)
+    const graph = filterSourceGraphByRequestedDates(full.data, input)
     apiLog(`← ${source} ok`, {
       elapsedMs,
       deals: full.data.deals.length,
+      dealsAfterDateFilter: graph.deals.length,
       tripsInResponse: graph.trips.length,
       legsInResponse: graph.legs.length,
       flightsInResponse: graph.flights.length,
@@ -186,7 +238,16 @@ Bun.serve({
     }
     if (req.method === "GET" && url.pathname === "/api/fixture-demo") {
       apiLog("GET /api/fixture-demo")
-      return jsonResponse(fixture)
+      const fixtureInput = fixture.input
+      if (!fixtureInput) return jsonResponse(fixture)
+      return jsonResponse({
+        ...fixture,
+        sources: fixture.sources?.map((source) =>
+          source.ok
+            ? { ...source, ...filterSourceGraphByRequestedDates(source, fixtureInput) }
+            : source
+        ),
+      })
     }
 
     if (req.method === "POST" && url.pathname === "/api/search") {
@@ -224,7 +285,7 @@ Bun.serve({
                 source: r.source,
                 ok: true as const,
                 metadata: r.result.metadata,
-                deals: r.result.data.deals,
+                deals: r.deals,
                 trips: r.trips,
                 legs: r.legs,
                 flights: r.flights,
