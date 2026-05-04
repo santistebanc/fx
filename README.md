@@ -2,20 +2,6 @@
 
 **flyscan** compares flight itineraries from **Skyscanner** and **Kiwi** by scraping FlightsFinder-style portal pages, then normalizing trips, deals, and flights into shared schemas. The web UI lets you filter by price, duration, and stops, and inspect each itinerary (route, legs, timeline) before opening a book link.
 
-## Screenshots
-
-### Results
-
-Flight list with source tags, price and trip stats, and a per-itinerary timeline. Sliders and the stops bar filter the list in real time.
-
-![Search results: filtered trips, stats sliders, itinerary timeline](docs/screenshots/app-results.png)
-
-### Empty state
-
-Before the first search (or after clearing), the app prompts you to run a search or load the bundled demo snapshot.
-
-![Empty state: prompt to search or load demo](docs/screenshots/app-empty.png)
-
 ## Quick start
 
 ```bash
