@@ -1,8 +1,20 @@
 # flyscan
 
-![flyscan app results state](docs/screenshots/app-results.png)
+**flyscan** compares flight itineraries from **Skyscanner** and **Kiwi** by scraping FlightsFinder-style portal pages, then normalizing trips, deals, and flights into shared schemas. The web UI lets you filter by price, duration, and stops, and inspect each itinerary (route, legs, timeline) before opening a book link.
 
-flyscan compares flight itineraries from **Skyscanner** and **Kiwi** by scraping FlightsFinder-style portal pages, then normalizing trips/deals/flights into shared schemas.
+## Screenshots
+
+### Results
+
+Flight list with source tags, price and trip stats, and a per-itinerary timeline. Sliders and the stops bar filter the list in real time.
+
+![Search results: filtered trips, stats sliders, itinerary timeline](docs/screenshots/app-results.png)
+
+### Empty state
+
+Before the first search (or after clearing), the app prompts you to run a search or load the bundled demo snapshot.
+
+![Empty state: prompt to search or load demo](docs/screenshots/app-empty.png)
 
 ## Quick start
 
@@ -15,21 +27,28 @@ Open the URL printed in the terminal (default `http://localhost:3010`).
 
 ## Main scripts
 
-- `bun test` — unit tests.
-- `bun run verify-fixtures` — validate bundled fixture HTML against parsers.
-- `bun run demo` — run CLI demo searches.
-- `bun run web` — run web UI + API (`POST /api/search`, `GET /api/fixture-demo`).
-- `bun run serve` — run standalone fake portal server (`/portal/*` routes).
+| Command | Description |
+| -------- | ----------- |
+| `bun test` | Unit tests |
+| `bun run verify-fixtures` | Validate bundled fixture HTML against parsers |
+| `bun run demo` | CLI demo searches |
+| `bun run web` | Web UI + API (`POST /api/search`, `GET /api/fixture-demo`) |
+| `bun run serve` | Standalone fake portal server (`/portal/*` routes) |
+
+## API
+
+- **`POST /api/search`** — Live scrapes. Body: `origin`, `destination`, `departureDate`, optional `returnDate`, optional `sources` (default: both `skyscanner` and `kiwi`). The bundled UI always requests both sources.
+- **`GET /api/fixture-demo`** — Frozen snapshot from `fixture.ts` (same shape as the live response).
 
 ## Notes
 
-- UI always queries both sources (`skyscanner` + `kiwi`).
-- Demo data comes from `fixture.ts`.
-- Prices are displayed in EUR and rounded to whole units in the UI.
+- Demo data for the **Load demo** control comes from `fixture.ts`.
+- Prices are shown in **EUR**, rounded to whole units in the UI.
+- Skyscanner polling can be tuned with env (e.g. `FX_POLL_MAX_RETRIES`); see `skyscanner/search.ts`.
 
 ## Project layout
 
-- `skyscanner/`, `kiwi/` — source-specific scraping and parsing.
-- `web/client/` — frontend app.
-- `web/server.ts` — web/API server.
-- `fixture.ts`, `fixturePortal.ts` — demo and fake portal fixtures.
+- `skyscanner/`, `kiwi/` — Source-specific scraping and parsing
+- `web/client/` — React frontend (`vite` build → `web/public/dist/`)
+- `web/server.ts` — Static UI + JSON API
+- `fixture.ts`, `fixturePortal.ts` — Demo snapshot and fake portal fixtures
