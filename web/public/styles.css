@@ -806,6 +806,7 @@ body {
   user-select: none;
   line-height: 1;
   transform: translateX(-50%);
+  transition: left 0.38s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .timeline-times-above .t-time { bottom: 0; }
@@ -830,6 +831,7 @@ body {
   background: color-mix(in oklch, var(--line) 70%, transparent);
   pointer-events: none;
   z-index: 3;
+  transition: left 0.38s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .t-seg {
@@ -840,6 +842,8 @@ body {
   box-shadow: 0 1px 4px var(--shadow-seg), inset 0 1px 0 oklch(1 0 0 / 0.2);
   z-index: 2;
   overflow: visible;
+  transition: left 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.38s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .t-seg--0 { background: var(--seg0); }
 .t-seg--1 { background: var(--seg1); }

@@ -47,7 +47,6 @@ export function App() {
   const [allTrips, setAllTrips] = useState<UiTrip[]>([])
   const [filters, setFiltersState] = useState<Filters>({ price: 9999999, duration: 9999, stops: 99, layover: 9999 })
   const [idx, setIdx] = useState(0)
-  const [animKey, setAnimKey] = useState(0)
   const [status, setStatus] = useState<Status>("idle")
   const [errorMsg, setErrorMsg] = useState("")
   const [bookOpen, setBookOpen] = useState(false)
@@ -60,7 +59,6 @@ export function App() {
     setAllTrips(trips)
     setFiltersState(defaultFilters(trips))
     setIdx(0)
-    setAnimKey(k => k + 1)
     setStatus("idle")
   }
 
@@ -118,8 +116,7 @@ export function App() {
   const priceStep = Math.max(1, Math.round((maxPrice - minPrice) / 100))
 
   function navigate(dir: number) {
-    setAnimKey(k => k + 1)
-    setIdx(i => Math.max(0, Math.min(visible.length - 1, clampedIdx + dir)))
+    setIdx(Math.max(0, Math.min(visible.length - 1, clampedIdx + dir)))
   }
 
   return (
@@ -186,13 +183,15 @@ export function App() {
               </div>
 
               {trip ? (
-                <div key={`trip-${trip.id}-${animKey}`} className="anim-in">
-                  <div className="price-row anim-in">
+                <div>
+                  <div className="price-row">
                     <div className="trip-stat-filters">
                       <div className="trip-stat-stack">
                         <div className="trip-stat-hero-row">
                           <span className="stat-name">Duration</span>
-                          <span className="trip-stat-hero-val">{fmtDur(trip.stats.duration)}</span>
+                          <span key={trip.stats.duration} className="trip-stat-hero-val anim-in">
+                            {fmtDur(trip.stats.duration)}
+                          </span>
                         </div>
                         <StatSlider
                           label="Duration"
@@ -209,7 +208,9 @@ export function App() {
                       <div className="trip-stat-stack">
                         <div className="trip-stat-hero-row">
                           <span className="stat-name">Layover</span>
-                          <span className="trip-stat-hero-val">{fmtDur(trip.stats.layover)}</span>
+                          <span key={trip.stats.layover} className="trip-stat-hero-val anim-in">
+                            {fmtDur(trip.stats.layover)}
+                          </span>
                         </div>
                         <StatSlider
                           label="Layover"
@@ -241,7 +242,9 @@ export function App() {
                     <div className="price-hero-stack">
                       <div className="price-hero-row">
                         <span className="stat-name">Price</span>
-                        <div className="price-hero">{fmtPrice(trip.price, trip.currency)}</div>
+                        <div key={trip.price} className="price-hero anim-in">
+                          {fmtPrice(trip.price, trip.currency)}
+                        </div>
                       </div>
                       <StatSlider
                         label="Price"
@@ -257,31 +260,35 @@ export function App() {
                     </div>
                   </div>
 
-                  <div className="itinerary-block anim-in anim-in-d2">
+                  <div className="itinerary-block">
                     <div className="itin-header">
                       <span className="itin-direction">Outbound</span>
-                      <span className="itin-date">{trip.outbound.date}</span>
+                      <span key={trip.outbound.date} className="itin-date anim-in">
+                        {trip.outbound.date}
+                      </span>
                       <div className="itin-stats">
-                        <span>Duration <span className="itin-stat-val">{fmtDur(trip.outbound.duration)}</span></span>
+                        <span>Duration <span key={trip.outbound.duration} className="itin-stat-val anim-in">{fmtDur(trip.outbound.duration)}</span></span>
                         <span className="itin-stat-sep">·</span>
-                        <span>Layover <span className="itin-stat-val">{fmtDur(trip.outbound.layover)}</span></span>
+                        <span>Layover <span key={trip.outbound.layover} className="itin-stat-val anim-in">{fmtDur(trip.outbound.layover)}</span></span>
                       </div>
                     </div>
-                    <TimelineBar flights={trip.outbound.flights} />
+                    <TimelineBar key="outbound" flights={trip.outbound.flights} />
                   </div>
 
                   {trip.inbound && (
-                    <div className="itinerary-block anim-in anim-in-d3">
+                    <div className="itinerary-block">
                       <div className="itin-header">
                         <span className="itin-direction">Return</span>
-                        <span className="itin-date">{trip.inbound.date}</span>
+                        <span key={trip.inbound.date} className="itin-date anim-in">
+                          {trip.inbound.date}
+                        </span>
                         <div className="itin-stats">
-                          <span>Duration <span className="itin-stat-val">{fmtDur(trip.inbound.duration)}</span></span>
+                          <span>Duration <span key={trip.inbound.duration} className="itin-stat-val anim-in">{fmtDur(trip.inbound.duration)}</span></span>
                           <span className="itin-stat-sep">·</span>
-                          <span>Layover <span className="itin-stat-val">{fmtDur(trip.inbound.layover)}</span></span>
+                          <span>Layover <span key={trip.inbound.layover} className="itin-stat-val anim-in">{fmtDur(trip.inbound.layover)}</span></span>
                         </div>
                       </div>
-                      <TimelineBar flights={trip.inbound.flights} />
+                      <TimelineBar key="inbound" flights={trip.inbound.flights} />
                     </div>
                   )}
                 </div>

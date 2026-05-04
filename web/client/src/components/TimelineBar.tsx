@@ -69,12 +69,12 @@ export function TimelineBar({ flights, showLegs = true }: { flights: UiFlight[];
             {boundaries.map((b, i) => (
               <div key={`tick-${i}`} className="t-tick" style={{ left: `${b.pct}%` }} />
             ))}
-            {segs.map((seg, i) => {
+            {segs.map((seg) => {
               const fl = seg.flight
               const isLastFlight = seg.index === flights.length - 1
               return (
                 <div
-                  key={`fl-${i}`}
+                  key={`fl-${seg.index}`}
                   className={`t-seg t-seg--${seg.index % SEG_COLORS.length}`}
                   style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%` }}
                   title={`${fl.from}→${fl.to}  ${fl.dep}–${fl.arr}  ${fmtDur(fl.dur)}`}
