@@ -32,6 +32,9 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
     }
   }
 
+  const knobPct = range > 0 ? ((knobValue - min) / range) * 100 : 100
+  const hatchWidthPct = 100 - knobPct
+
   return (
     <div className="stat-row">
       {!hideLabel && (
@@ -48,6 +51,17 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
                 left: `${fillLeftPct}%`,
                 width: `${fillWidthPct}%`,
               }}
+            />
+            <div
+              className="stat-hatch"
+              style={{
+                left: `${knobPct}%`,
+                width: `${hatchWidthPct}%`,
+              }}
+            />
+            <div
+              className="stat-knob"
+              style={{ left: `${knobPct}%` }}
             />
           </div>
           <input

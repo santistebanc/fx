@@ -94,7 +94,7 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
     for (const f of blk.flights) flightsById.set(f.id, f)
     for (const deal of blk.deals) {
       if (!dealsByTrip.has(deal.trip)) dealsByTrip.set(deal.trip, new Map())
-      const euroPrice = centsToEuros(deal.price)
+      const euroPrice = Math.round(centsToEuros(deal.price))
       const key = `${deal.provider}::${euroPrice}`
       dealsByTrip.get(deal.trip)!.set(key, { provider: deal.provider, price: euroPrice, link: deal.link })
     }
@@ -161,5 +161,26 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
     })
   }
 
-  return trips.sort((a, b) => a.price - b.price)
+  if (trips.length === 0) return trips
+
+  const med = (vals: number[]) => {
+    const s = [...vals].sort((a, b) => a - b)
+    const m = Math.floor(s.length / 2)
+    return s.length % 2 === 0 ? ((s[m - 1] ?? 0) + (s[m] ?? 0)) / 2 : (s[m] ?? 0)
+  }
+
+  const medP = med(trips.map(t => t.price))
+  const medD = med(trips.map(t => t.stats.duration))
+  const medS = med(trips.map(t => t.stats.stops))
+  const medL = med(trips.map(t => t.stats.layover))
+
+  const norm = (v: number, median: number) => median === 0 ? 1 : v / median
+
+  const score = (t: UiTrip) =>
+    0.60 * norm(t.price,          medP) +
+    0.20 * norm(t.stats.duration, medD) +
+    0.10 * norm(t.stats.stops,    medS) +
+    0.10 * norm(t.stats.layover,  medL)
+
+  return trips.sort((a, b) => score(a) - score(b))
 }
