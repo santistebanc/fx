@@ -51,18 +51,21 @@ export const extractInitialData = (htmlString: string): Effect.Effect<InitialDat
 
     const dataObjectString = match[0]
     const extractField = fieldExtractor(dataObjectString, htmlString)
+    const extractOptional = fieldExtractorOptional(dataObjectString)
 
     const _token = yield* extractField("_token")
     const originplace = yield* extractField("originplace")
     const destinationplace = yield* extractField("destinationplace")
     const outbounddate = yield* extractField("outbounddate")
-    const inbounddate = yield* extractField("inbounddate")
+    const type = yield* extractField("type")
+    /** One-way portal pages omit `inbounddate` from the embedded `data` object. */
+    const inbounddate =
+      type === "oneway" ? extractOptional("inbounddate") ?? "" : yield* extractField("inbounddate")
     const cabinclass = yield* extractField("cabinclass")
     const adults = yield* extractField("adults")
     const children = yield* extractField("children")
     const infants = yield* extractField("infants")
     const currency = yield* extractField("currency")
-    const type = yield* extractField("type")
     const bagsCabin = yield* extractField("bags-cabin")
     const bagsChecked = yield* extractField("bags-checked")
     const now = yield* DateTime.now
@@ -86,6 +89,14 @@ export const extractInitialData = (htmlString: string): Effect.Effect<InitialDat
     }
   })
 
+/** Same as {@link fieldExtractor} but returns `undefined` when the key is absent (one-way searches). */
+const fieldExtractorOptional = (dataObjectString: string) => (fieldName: string): string | undefined => {
+  const regex = new RegExp(`'${fieldName}'\\s*:\\s*'((?:[^']|\\\\')*)'`, "s")
+  const fieldMatch = dataObjectString.match(regex)
+  if (fieldMatch && fieldMatch[1]) return fieldMatch[1]
+  return undefined
+}
+
 // Extract individual fields using regex
 const fieldExtractor = (dataObjectString: string, fullHtml: string) => (fieldName: string) =>
   Effect.gen(function* () {
@@ -97,7 +108,7 @@ const fieldExtractor = (dataObjectString: string, fullHtml: string) => (fieldNam
     )
     const fieldMatch = dataObjectString.match(regex)
     if (fieldMatch && fieldMatch[1]) {
-      return yield* Effect.succeed(fieldMatch[1])
+      return fieldMatch[1]
     }
 
     return yield* Effect.fail(

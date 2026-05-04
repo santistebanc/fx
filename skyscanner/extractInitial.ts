@@ -79,7 +79,7 @@ const fieldExtractor = (dataObjectString: string) => (fieldName: string) =>
     )
     const fieldMatch = dataObjectString.match(regex)
     if (fieldMatch && fieldMatch[1]) {
-      return yield* Effect.succeed(fieldMatch[1])
+      return fieldMatch[1]
     }
 
     return yield* Effect.fail(

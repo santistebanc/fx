@@ -8,7 +8,7 @@
  * For offline portal HTML used by CLI (`bun run demo` without --real), run `bun run serve`
  * on PORT — this process no longer embeds `/portal/*` fixtures.
  */
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { stat } from "node:fs/promises"
 import { join } from "node:path"
 import { Effect, ParseResult, Schema } from "effect"
@@ -25,35 +25,7 @@ const apiLog = (msg: string, detail?: Record<string, unknown>) => {
   else console.log(`[fx api] ${msg}`, detail)
 }
 
-const loadPublic = (name: string) => readFileSync(join(dir, "public", name), "utf-8")
-
-let appJsBundleCache: { mtimeMs: number; body: Uint8Array } | null = null
-
-async function bundleAppJs(): Promise<Uint8Array> {
-  const entry = join(dir, "public", "app.ts")
-  const st = await stat(entry)
-  if (appJsBundleCache && appJsBundleCache.mtimeMs === st.mtimeMs) {
-    return appJsBundleCache.body
-  }
-  const result = await Bun.build({
-    entrypoints: [entry],
-    target: "browser",
-    format: "esm",
-    minify: false,
-    sourcemap: "none",
-  })
-  if (!result.success) {
-    for (const log of result.logs) {
-      console.error(log)
-    }
-    throw new Error("Bun.build failed for web/public/app.ts")
-  }
-  const out = result.outputs[0]
-  if (!out) throw new Error("No bundle output for app.ts")
-  const body = new Uint8Array(await out.arrayBuffer())
-  appJsBundleCache = { mtimeMs: st.mtimeMs, body }
-  return body
-}
+const distIndex = join(dir, "public", "dist", "index.html")
 
 const htmlResponse = (body: string, type: string) =>
   new Response(body, {
@@ -182,29 +154,37 @@ Bun.serve({
     const url = new URL(req.url)
 
     if (req.method === "GET" && url.pathname === "/") {
-      return htmlResponse(loadPublic("index.html"), "text/html; charset=utf-8")
-    }
-    if (req.method === "GET" && url.pathname === "/styles.css") {
-      return htmlResponse(loadPublic("styles.css"), "text/css; charset=utf-8")
-    }
-    if (req.method === "GET" && url.pathname === "/app.js") {
       try {
-        const body = await bundleAppJs()
-        return new Response(body, {
-          headers: {
-            "content-type": "application/javascript; charset=utf-8",
-            "cache-control": "no-store",
-          },
-        })
-      } catch (e) {
-        console.error("[fx web] bundle app.ts failed:", e)
-        return new Response(`console.error(${JSON.stringify(String(e))});\n`, {
-          status: 500,
-          headers: { "content-type": "application/javascript; charset=utf-8" },
-        })
+        await stat(distIndex)
+        return htmlResponse(readFileSync(distIndex, "utf-8"), "text/html; charset=utf-8")
+      } catch {
+        return new Response(
+          "React UI not built. Run: cd web/client && bun run build",
+          { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } },
+        )
       }
     }
-
+    if (req.method === "GET" && url.pathname.startsWith("/assets/")) {
+      const name = url.pathname.replace(/^\//, "")
+      const file = join(dir, "public", "dist", name)
+      try {
+        const st = await stat(file)
+        if (!st.isFile()) return new Response("Not found", { status: 404 })
+        const ext = name.split(".").pop() || ""
+        const type =
+          ext === "js"
+            ? "application/javascript; charset=utf-8"
+            : ext === "css"
+              ? "text/css; charset=utf-8"
+              : ext === "map"
+                ? "application/json; charset=utf-8"
+                : "application/octet-stream"
+        const body = readFileSync(file)
+        return new Response(body, { headers: { "content-type": type, "cache-control": "no-store" } })
+      } catch {
+        return new Response("Not found", { status: 404 })
+      }
+    }
     if (req.method === "GET" && url.pathname === "/api/fixture-demo") {
       apiLog("GET /api/fixture-demo")
       return jsonResponse(fixture)
@@ -275,3 +255,6 @@ Bun.serve({
 console.log(`Flight UI  http://localhost:${port}`)
 console.log(`API        POST http://localhost:${port}/api/search  (live)`)
 console.log(`           GET  http://localhost:${port}/api/fixture-demo  (snapshot from fixture.ts)`)
+if (!existsSync(distIndex)) {
+  console.warn(`[fx web] React UI missing (${distIndex}). Build with: bun run web:build`)
+}

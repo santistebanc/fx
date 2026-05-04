@@ -1,0 +1,4 @@
+@import "tailwindcss";
+
+/** Existing flight UI (trip bars, sliders, panels): served from web/public */
+@import "../../public/styles.css";

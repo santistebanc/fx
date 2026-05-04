@@ -63,7 +63,7 @@ export const splitLocalIsoDateTime = (isoMinute: string): { date: string; time: 
 }
 
 /** Order-only timeline for chaining segments (not real TZ). */
-export const naiveUtcMsFromLocalParts = (isoDate: string, hhmm: string): number => {
+const naiveUtcMsFromLocalParts = (isoDate: string, hhmm: string): number => {
   const [y, mo, d] = isoDate.split("-").map(Number)
   const [hh, mm] = hhmm.split(":").map(Number)
   return Date.UTC(y, mo - 1, d, hh, mm, 0, 0)

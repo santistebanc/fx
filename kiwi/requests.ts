@@ -67,7 +67,10 @@ export const makePollRequest = (
     const client = yield* HttpClient.HttpClient
     const config = yield* KiwiConfig
 
-    const formParams = new URLSearchParams(initialData)
+    /** One-way searches must not POST `inbounddate` (portal initial HTML omits it). */
+    const formParams = new URLSearchParams(
+      Object.entries(initialData).filter(([key]) => !(key === "inbounddate" && initialData.type !== "return")),
+    )
 
     const pollUrl = `${config.baseUrl}/portal/kiwi/search`
     const request = HttpClientRequest.post(pollUrl, {

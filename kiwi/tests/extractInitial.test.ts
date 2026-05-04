@@ -48,3 +48,25 @@ test("extractInitialData extracts correct data from HTML", async () => {
   expect(result.noc).toMatch(/^\d+$/) // Should be numeric string
   expect(Number(result.noc)).toBeGreaterThan(0) // Should be a positive number
 })
+
+test("extractInitialData allows missing inbounddate for oneway", async () => {
+  const htmlString = `
+                        data: {
+                            '_token': 'tok123',
+                            'originplace': 'BER',
+                            'destinationplace': 'MAD',
+                            'outbounddate': '15/07/2026',
+                            'cabinclass': 'M',
+                            'adults': '1',
+                            'children': '0',
+                            'infants': '0',
+                            'currency': 'EUR',
+                            'type': 'oneway',
+                            'bags-cabin': '0',
+                            'bags-checked': '0',
+                        }`
+  const result = await Effect.runPromise(extractInitialData(htmlString))
+  expect(result.type).toBe("oneway")
+  expect(result.inbounddate).toBe("")
+  expect(result.outbounddate).toBe("15/07/2026")
+})

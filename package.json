@@ -1,5 +1,5 @@
 {
-  "name": "fx",
+  "name": "flyscan",
   "module": "index.ts",
   "type": "module",
   "private": true,
@@ -22,6 +22,8 @@
     "demo": "bun run scripts/demo.ts",
     "verify-fixtures": "bun run scripts/verifyFixtures.ts",
     "serve": "bun run index.ts",
-    "web": "bun run web/server.ts"
+    "web": "bun run web/server.ts",
+    "web:client": "bun run --cwd web/client dev",
+    "web:build": "bun run --cwd web/client build"
   }
 }
