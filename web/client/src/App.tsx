@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { SearchChrome } from "./components/SearchChrome"
-import { Sidebar, type Filters } from "./components/Sidebar"
+import type { Filters } from "./components/Sidebar"
+import { StatSlider } from "./components/StatSlider"
+import { StopsFilterBar } from "./components/StopsFilterBar"
 import { TimelineBar } from "./components/TimelineBar"
 import { BookModal } from "./components/BookModal"
 import { transformApiResponse, type ApiPayload, type UiTrip } from "./lib/transformApiResponse"
@@ -98,6 +100,24 @@ export function App() {
   const visible = filterTrips(allTrips, filters)
   const trip = visible[idx] ?? null
 
+  const durs = allTrips.map(t => t.stats.duration)
+  const minDur = allTrips.length > 0 ? Math.min(...durs) : 0
+  const maxDur = allTrips.length > 0 ? Math.max(...durs) : 0
+  const layoversAll = allTrips.map(t => t.stats.layover)
+  const maxLayover = allTrips.length > 0 ? Math.max(...layoversAll) : 0
+  const minLayover =
+    visible.length > 0 ? Math.min(...visible.map(t => t.stats.layover)) : 0
+
+  const stopsAll = allTrips.map(t => t.stats.stops)
+  const maxStops = allTrips.length > 0 ? Math.max(...stopsAll) : 0
+  const minStops =
+    visible.length > 0 ? Math.min(...visible.map(t => t.stats.stops)) : 0
+
+  const prices = allTrips.map(t => t.price)
+  const minPrice = allTrips.length > 0 ? Math.min(...prices) : 0
+  const maxPrice = allTrips.length > 0 ? Math.max(...prices) : 0
+  const priceStep = Math.max(1, Math.round((maxPrice - minPrice) / 100))
+
   function navigate(dir: number) {
     setAnimKey(k => k + 1)
     setIdx(i => Math.max(0, Math.min(visible.length - 1, i + dir)))
@@ -108,8 +128,6 @@ export function App() {
       <SearchChrome onSearch={onSearch} onDemo={onDemo} busy={status === "loading"} />
 
       <div className="workspace">
-        <Sidebar trips={allTrips} filters={filters} setFilter={setFilter} currentTrip={trip} />
-
         <main className="main-col">
           {status === "loading" && (
             <div className="empty-state">
@@ -153,17 +171,73 @@ export function App() {
               {trip ? (
                 <div key={`trip-${trip.id}-${animKey}`} className="anim-in">
                   <div className="price-row anim-in">
-                    <div className="trip-summary-chips">
-                      <div className="trip-chip">
-                        <span className="chip-label">Duration</span>
-                        <span className="chip-val">{fmtDur(trip.stats.duration)}</span>
+                    <div className="trip-summary-stats">
+                      <div className="trip-stat-stack">
+                        <div className="trip-stat-hero-row">
+                          <span className="stat-name">Avg duration</span>
+                          <span className="trip-stat-hero-val">{fmtDur(trip.stats.duration)}</span>
+                        </div>
+                        <StatSlider
+                          label="Avg duration"
+                          hideLabel
+                          value={filters.duration}
+                          min={minDur}
+                          max={maxDur}
+                          step={30}
+                          format={fmtDur}
+                          onChange={v => setFilter("duration", v)}
+                          tripValue={trip.stats.duration}
+                        />
                       </div>
-                      <div className="trip-chip">
-                        <span className="chip-label">Total layover</span>
-                        <span className="chip-val">{fmtDur(trip.stats.layover)}</span>
+                      <div className="trip-stat-stack">
+                        <div className="trip-stat-hero-row">
+                          <span className="stat-name">Avg layover</span>
+                          <span className="trip-stat-hero-val">{fmtDur(trip.stats.layover)}</span>
+                        </div>
+                        <StatSlider
+                          label="Avg layover"
+                          hideLabel
+                          value={filters.layover}
+                          min={minLayover}
+                          max={maxLayover}
+                          step={15}
+                          format={fmtDur}
+                          onChange={v => setFilter("layover", v)}
+                          tripValue={trip.stats.layover}
+                        />
+                      </div>
+                      <div className="trip-stat-stack trip-stat-stack--stops">
+                        <div className="trip-stat-hero-row">
+                          <span className="stat-name">Stops</span>
+                        </div>
+                        <StopsFilterBar
+                          label="Stops"
+                          hideLabel
+                          value={filters.stops}
+                          min={minStops}
+                          max={maxStops}
+                          onChange={v => setFilter("stops", v)}
+                          tripValue={trip.stats.stops}
+                        />
                       </div>
                     </div>
-                    <div className="price-hero">{fmtPrice(trip.price, trip.currency)}</div>
+                    <div className="price-hero-stack">
+                      <div className="price-hero-row">
+                        <span className="stat-name">Price</span>
+                        <div className="price-hero">{fmtPrice(trip.price, trip.currency)}</div>
+                      </div>
+                      <StatSlider
+                        label="Price"
+                        hideLabel
+                        value={filters.price}
+                        min={minPrice}
+                        max={maxPrice}
+                        step={priceStep}
+                        format={v => fmtPrice(v, trip.currency)}
+                        onChange={v => setFilter("price", v)}
+                        tripValue={trip.price}
+                      />
+                    </div>
                   </div>
 
                   <div className="itinerary-block anim-in anim-in-d2">
