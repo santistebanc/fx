@@ -98,20 +98,19 @@ export function App() {
   }
 
   const visible = filterTrips(allTrips, filters)
-  const trip = visible[idx] ?? null
+  const clampedIdx = visible.length > 0 ? Math.min(idx, visible.length - 1) : 0
+  const trip = visible[clampedIdx] ?? null
 
   const durs = allTrips.map(t => t.stats.duration)
   const minDur = allTrips.length > 0 ? Math.min(...durs) : 0
   const maxDur = allTrips.length > 0 ? Math.max(...durs) : 0
   const layoversAll = allTrips.map(t => t.stats.layover)
+  const minLayover = allTrips.length > 0 ? Math.min(...layoversAll) : 0
   const maxLayover = allTrips.length > 0 ? Math.max(...layoversAll) : 0
-  const minLayover =
-    visible.length > 0 ? Math.min(...visible.map(t => t.stats.layover)) : 0
 
   const stopsAll = allTrips.map(t => t.stats.stops)
+  const minStops = allTrips.length > 0 ? Math.min(...stopsAll) : 0
   const maxStops = allTrips.length > 0 ? Math.max(...stopsAll) : 0
-  const minStops =
-    visible.length > 0 ? Math.min(...visible.map(t => t.stats.stops)) : 0
 
   const prices = allTrips.map(t => t.price)
   const minPrice = allTrips.length > 0 ? Math.min(...prices) : 0
@@ -120,7 +119,7 @@ export function App() {
 
   function navigate(dir: number) {
     setAnimKey(k => k + 1)
-    setIdx(i => Math.max(0, Math.min(visible.length - 1, i + dir)))
+    setIdx(i => Math.max(0, Math.min(visible.length - 1, clampedIdx + dir)))
   }
 
   return (
@@ -154,16 +153,34 @@ export function App() {
             <>
               <div className="nav-row">
                 <div className="nav-arrows">
-                  <button className="arrow-btn" disabled={idx <= 0} onClick={() => navigate(-1)}>← Prev</button>
-                  <button className="arrow-btn" disabled={idx >= visible.length - 1} onClick={() => navigate(1)}>Next →</button>
+                  <button
+                    type="button"
+                    className="arrow-btn"
+                    disabled={clampedIdx <= 0}
+                    aria-label="Previous trip"
+                    onClick={() => navigate(-1)}
+                  >
+                    <span className="arrow-btn-icon" aria-hidden="true">←</span>
+                    <span className="arrow-btn-label">Prev</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="arrow-btn"
+                    disabled={clampedIdx >= visible.length - 1}
+                    aria-label="Next trip"
+                    onClick={() => navigate(1)}
+                  >
+                    <span className="arrow-btn-label">Next</span>
+                    <span className="arrow-btn-icon" aria-hidden="true">→</span>
+                  </button>
                 </div>
                 <span className="trip-counter">
-                  {visible.length === 0 ? "No trips match filters" : `Trip ${idx + 1} of ${visible.length}`}
+                  {visible.length === 0 ? "No trips match filters" : `Trip ${clampedIdx + 1} of ${visible.length}`}
                 </span>
                 <div className="nav-spacer" />
                 {trip && (
                   <button className="book-btn" onClick={() => setBookOpen(true)}>
-                    Book ({trip.deals.length} offer{trip.deals.length !== 1 ? "s" : ""})
+                    Book
                   </button>
                 )}
               </div>
@@ -171,14 +188,14 @@ export function App() {
               {trip ? (
                 <div key={`trip-${trip.id}-${animKey}`} className="anim-in">
                   <div className="price-row anim-in">
-                    <div className="trip-summary-stats">
+                    <div className="trip-stat-filters">
                       <div className="trip-stat-stack">
                         <div className="trip-stat-hero-row">
-                          <span className="stat-name">Avg duration</span>
+                          <span className="stat-name">Duration</span>
                           <span className="trip-stat-hero-val">{fmtDur(trip.stats.duration)}</span>
                         </div>
                         <StatSlider
-                          label="Avg duration"
+                          label="Duration"
                           hideLabel
                           value={filters.duration}
                           min={minDur}
@@ -191,11 +208,11 @@ export function App() {
                       </div>
                       <div className="trip-stat-stack">
                         <div className="trip-stat-hero-row">
-                          <span className="stat-name">Avg layover</span>
+                          <span className="stat-name">Layover</span>
                           <span className="trip-stat-hero-val">{fmtDur(trip.stats.layover)}</span>
                         </div>
                         <StatSlider
-                          label="Avg layover"
+                          label="Layover"
                           hideLabel
                           value={filters.layover}
                           min={minLayover}

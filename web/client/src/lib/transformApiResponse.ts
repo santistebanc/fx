@@ -144,10 +144,7 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
     const sortedDeals = [...dealsMap.values()].sort((a, b) => a.price - b.price)
     const outboundStops = Math.max(0, outbound.flights.length - 1)
     const returnStops = inbound ? Math.max(0, inbound.flights.length - 1) : 0
-    const stops = Math.max(outboundStops, returnStops)
-
-    const totalDurationMin = outbound.duration + (inbound?.duration ?? 0)
-    const totalLayoverMin = outbound.layover + (inbound?.layover ?? 0)
+    const stops = outboundStops + returnStops
 
     trips.push({
       id: tripId,
@@ -157,9 +154,9 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
       outbound,
       inbound,
       stats: {
-        duration: Math.round(totalDurationMin / 2),
+        duration: outbound.duration + (inbound?.duration ?? 0),
         stops,
-        layover: Math.round(totalLayoverMin / 2),
+        layover: outbound.layover + (inbound?.layover ?? 0),
       },
     })
   }

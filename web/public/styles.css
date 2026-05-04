@@ -21,7 +21,6 @@
   --seg1: oklch(0.68 0.17 158);
   --seg2: oklch(0.66 0.16 295);
   --seg3: oklch(0.74 0.17 65);
-  --seg-layover: oklch(0.50 0.04 255 / 0.38);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -40,6 +39,8 @@ body {
   display: grid;
   grid-template-rows: auto 1fr;
   min-height: 100vh;
+  min-width: 0;
+  width: 100%;
 }
 
 .search-bar {
@@ -55,6 +56,7 @@ body {
   flex-wrap: nowrap;
   max-width: 1440px;
   margin: 0 auto;
+  min-width: 0;
 }
 
 .brand {
@@ -133,6 +135,10 @@ body {
 
 .search-btn {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   padding: 0.42rem 1rem;
   background: var(--accent);
   color: oklch(0.18 0.01 255);
@@ -144,9 +150,62 @@ body {
   white-space: nowrap;
   letter-spacing: 0.02em;
   transition: filter 0.12s;
+  flex-shrink: 0;
 }
+
+.search-btn-icon {
+  display: none;
+  flex-shrink: 0;
+}
+
 .search-btn:hover:not(:disabled) { filter: brightness(1.08); }
 .search-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+@media (max-width: 768px) {
+  .brand {
+    display: none;
+  }
+
+  .search-row > .brand + .search-divider {
+    display: none;
+  }
+
+  .demo-btn {
+    display: none;
+  }
+
+  .search-bar {
+    padding: 0.5rem 1rem;
+  }
+
+  .search-row {
+    gap: 0.4rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .search-btn:not(:disabled) .search-btn-icon {
+    display: block;
+  }
+
+  .search-btn:not(:disabled) .search-btn-label {
+    display: none;
+  }
+
+  .search-btn:disabled .search-btn-icon {
+    display: none;
+  }
+
+  .search-btn {
+    padding: 0.42rem 0.55rem;
+    min-width: 2.25rem;
+  }
+
+  .search-btn:disabled {
+    padding: 0.42rem 0.65rem;
+    min-width: 0;
+  }
+}
 
 .demo-btn {
   padding: 0.42rem 0.85rem;
@@ -168,6 +227,7 @@ body {
   display: grid;
   grid-template-columns: 1fr;
   min-height: 0;
+  min-width: 0;
   max-width: 1440px;
   margin: 0 auto;
   width: 100%;
@@ -186,9 +246,11 @@ body {
 .main-col {
   padding: 1.25rem 1.5rem 2rem;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0;
 }
 
 /* ── SIDEBAR FILTERS ── */
@@ -208,7 +270,7 @@ body {
   padding-right: 0.5rem;
 }
 
-.stat-row { display: flex; flex-direction: column; gap: 0.2rem; }
+.stat-row { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
 
 .stat-head { display: flex; justify-content: space-between; align-items: baseline; }
 
@@ -226,6 +288,8 @@ body {
   flex-direction: column;
   align-items: stretch;
   gap: 0.35rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .stat-track-shell {
@@ -269,12 +333,13 @@ body {
 
 .stat-slider-bounds {
   position: absolute;
+  left: 50%;
   top: 0;
+  transform: translateX(-50%);
   font-size: 0.65rem;
   line-height: 1.2;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  transition: left 0.16s ease;
   pointer-events: none;
 }
 
@@ -356,6 +421,10 @@ body {
 .nav-arrows { display: flex; gap: 0.35rem; align-items: center; }
 
 .arrow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
   padding: 0.38rem 0.85rem;
   border: 1px solid var(--line);
   background: var(--surface-card);
@@ -367,8 +436,25 @@ body {
   min-width: 4rem;
   transition: border-color 0.12s, color 0.12s, background 0.12s;
 }
+
+.arrow-btn-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
 .arrow-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--control-raised-hover); }
 .arrow-btn:disabled { opacity: 0.38; cursor: not-allowed; }
+
+@media (max-width: 520px) {
+  .arrow-btn .arrow-btn-label {
+    display: none;
+  }
+
+  .arrow-btn {
+    min-width: 2.35rem;
+    padding: 0.38rem 0.5rem;
+  }
+}
 
 .trip-counter { font-size: 0.98rem; font-weight: 700; color: var(--muted); white-space: nowrap; }
 
@@ -390,22 +476,52 @@ body {
 
 /* ── PRICE HERO ── */
 .price-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  grid-template-rows: auto;
+  align-items: start;
   gap: 1rem;
   margin-bottom: 0.5rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.trip-stat-filters {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: row;
   flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.trip-stat-filters .trip-stat-stack {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: min(200px, 100%);
+  width: auto;
+}
+
+.trip-stat-filters .trip-stat-stack--stops {
+  flex: 1 1 0;
+  max-width: min(150px, 100%);
 }
 
 .price-hero-stack {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 0.35rem;
-  flex: 0 1 250px;
-  max-width: 250px;
+  box-sizing: border-box;
+  max-width: min(250px, 100%);
   width: 100%;
+  min-width: 0;
+  justify-self: end;
+  align-self: start;
 }
 
 .price-hero-row {
@@ -414,6 +530,8 @@ body {
   justify-content: flex-end;
   gap: 0.45rem;
   width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .price-hero-stack .stat-row,
@@ -422,36 +540,31 @@ body {
 }
 
 .price-hero {
-  font-size: clamp(2rem, 4vw, 3rem);
+  font-size: clamp(1.35rem, 4vw, 3rem);
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  min-width: 0;
+  text-align: right;
 }
 
 /* ── TRIP SUMMARY (inline stat + slider) ── */
-.trip-summary-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.25rem;
-  flex: 1 1 auto;
-  align-items: flex-start;
-  min-width: 0;
-}
-
 .trip-stat-stack {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.35rem;
-  flex: 1 1 250px;
-  max-width: 250px;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: min(250px, 100%);
   width: 100%;
+  box-sizing: border-box;
 }
 
 .trip-stat-stack--stops {
-  flex: 1 1 200px;
-  max-width: 200px;
+  flex: 1 1 0;
+  max-width: min(150px, 100%);
 }
 
 .trip-stat-hero-row {
@@ -460,15 +573,191 @@ body {
   justify-content: flex-start;
   gap: 0.45rem;
   width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .trip-stat-hero-val {
-  font-size: clamp(1.2rem, 2.4vw, 1.75rem);
+  font-size: clamp(1rem, 2.4vw, 1.75rem);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
   letter-spacing: -0.02em;
   line-height: 1;
+  min-width: 0;
+}
+
+/* Small screens: filters in two rows (duration | layover, then stops full width) */
+@media (max-width: 768px) and (min-width: 481px) {
+  .trip-stat-filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 0.65rem 0.75rem;
+    align-items: start;
+  }
+
+  .trip-stat-filters > .trip-stat-stack:first-child {
+    grid-column: 1;
+    grid-row: 1;
+    max-width: none;
+    width: 100%;
+  }
+
+  .trip-stat-filters > .trip-stat-stack:nth-child(2) {
+    grid-column: 2;
+    grid-row: 1;
+    max-width: none;
+    width: 100%;
+  }
+
+  .trip-stat-filters > .trip-stat-stack--stops {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-width: 100%;
+    width: 100%;
+  }
+}
+
+/* Smallest screens: one row per control — duration, layover, stops, then price */
+@media (max-width: 480px) {
+  .price-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .trip-stat-filters,
+  .price-hero-stack {
+    grid-column: auto;
+    grid-row: auto;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .trip-stat-filters {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .trip-stat-filters .trip-stat-stack,
+  .trip-stat-filters .trip-stat-stack--stops {
+    flex: none;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .price-hero-stack {
+    align-items: flex-end;
+  }
+}
+
+@media (max-width: 640px) {
+  .main-col {
+    padding: 0.85rem 0.75rem 1.25rem;
+    gap: 0.65rem;
+  }
+
+  .search-bar {
+    padding: 0.45rem 0.75rem;
+  }
+
+  .search-row {
+    gap: 0.35rem;
+  }
+
+  .nav-row {
+    padding-bottom: 0.65rem;
+    gap: 0.35rem;
+  }
+
+  .nav-arrows {
+    gap: 0.28rem;
+  }
+
+  .price-row {
+    gap: 0.75rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .trip-stat-stack {
+    gap: 0.28rem;
+  }
+
+  .price-hero-stack {
+    gap: 0.28rem;
+  }
+
+  .stat-bar-wrap {
+    gap: 0.28rem;
+  }
+
+  .book-btn {
+    padding: 0.32rem 0.65rem;
+  }
+
+  .itinerary-block {
+    padding: 0.65rem 0;
+    gap: 0.45rem;
+  }
+
+  .itin-header {
+    gap: 0.45rem;
+  }
+
+  .itin-stats {
+    gap: 0.35rem;
+  }
+
+  .timeline-wrap {
+    padding-inline: clamp(0.65rem, 4vw, 2rem);
+  }
+
+  .empty-state {
+    padding: 2rem 0.85rem;
+    gap: 0.5rem;
+  }
+
+  .modal-header,
+  .date-modal-header {
+    padding: 0.6rem 0.75rem;
+  }
+
+  .modal-body {
+    padding: 0.35rem 0;
+  }
+
+  .deal-row {
+    gap: 0.35rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .date-modal-footer {
+    padding: 0.55rem 0.75rem;
+    gap: 0.4rem;
+  }
+
+  .cal-range-display {
+    padding: 0.55rem 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .cal-nav {
+    padding: 0.5rem 0.35rem;
+  }
+
+  .legs-toggle {
+    margin-top: 0.35rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .btn-ghost,
+  .btn-apply {
+    padding: 0.35rem 0.65rem;
+  }
 }
 
 /* ── ITINERARY BLOCK ── */
@@ -556,8 +845,6 @@ body {
 .t-seg--1 { background: var(--seg1); }
 .t-seg--2 { background: var(--seg2); }
 .t-seg--3 { background: var(--seg3); }
-.t-seg--layover { background: var(--seg-layover); z-index: 1; top: 13px; bottom: 13px; }
-
 .t-seg-iata {
   position: absolute;
   top: 50%;

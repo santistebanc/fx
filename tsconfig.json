@@ -4,6 +4,7 @@
     "lib": [
       "ESNext"
     ],
+    "types": ["bun-types"],
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",

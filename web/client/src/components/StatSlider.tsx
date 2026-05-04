@@ -32,8 +32,6 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
     }
   }
 
-  const fillCenterPct = range > 0 ? fillLeftPct + fillWidthPct / 2 : 50
-
   return (
     <div className="stat-row">
       {!hideLabel && (
@@ -66,10 +64,6 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
         <div className="stat-bounds-wrap">
           <div
             className="stat-slider-bounds"
-            style={{
-              left: `${fillCenterPct}%`,
-              transform: "translateX(-50%)",
-            }}
             aria-label={`${format(min)} to ${format(knobValue)}`}
           >
             <span className="stat-bound-min">{format(min)}</span>

@@ -62,7 +62,7 @@ export function SearchChrome({ onSearch, onDemo, busy }: SearchChromeProps) {
           <div className="search-divider" />
 
           <div className="sf-group sf-group--airport">
-            <span className="sf-label">Origin</span>
+            <span className="sf-label">FROM</span>
             <input
               className="sf-val sf-input"
               value={origin}
@@ -75,7 +75,7 @@ export function SearchChrome({ onSearch, onDemo, busy }: SearchChromeProps) {
           </div>
 
           <div className="sf-group sf-group--airport">
-            <span className="sf-label">Destination</span>
+            <span className="sf-label">TO</span>
             <input
               className="sf-val sf-input"
               value={destination}
@@ -101,8 +101,21 @@ export function SearchChrome({ onSearch, onDemo, busy }: SearchChromeProps) {
 
           <div className="search-divider" />
 
-          <button className="search-btn" type="button" disabled={busy} onClick={() => void handleSearch()}>
-            {busy ? "Searching…" : "Search flights"}
+          <button
+            className="search-btn"
+            type="button"
+            disabled={busy}
+            aria-busy={busy || undefined}
+            aria-label={busy ? "Searching" : "Search"}
+            onClick={() => void handleSearch()}
+          >
+            <svg className="search-btn-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
+              />
+            </svg>
+            <span className="search-btn-label">{busy ? "Searching…" : "Search"}</span>
           </button>
           <button className="demo-btn" type="button" disabled={busy} onClick={() => void onDemo(applyInput)}>
             {busy ? "Loading…" : "Demo"}

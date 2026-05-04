@@ -179,8 +179,7 @@ Bun.serve({
               : ext === "map"
                 ? "application/json; charset=utf-8"
                 : "application/octet-stream"
-        const body = readFileSync(file)
-        return new Response(body, { headers: { "content-type": type, "cache-control": "no-store" } })
+        return new Response(Bun.file(file), { headers: { "content-type": type, "cache-control": "no-store" } })
       } catch {
         return new Response("Not found", { status: 404 })
       }

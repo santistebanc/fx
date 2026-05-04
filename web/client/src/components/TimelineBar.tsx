@@ -9,9 +9,7 @@ function fmtDur(minutes: number): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`
 }
 
-type Seg =
-  | { type: "flight"; index: number; leftPct: number; widthPct: number; flight: UiFlight }
-  | { type: "layover"; leftPct: number; widthPct: number; duration: number }
+type Seg = { type: "flight"; index: number; leftPct: number; widthPct: number; flight: UiFlight }
 
 function buildTimelineSegs(flights: UiFlight[]): { segs: Seg[]; totalMin: number } {
   const totalMin = flights.reduce((acc, fl, i) =>
@@ -25,9 +23,6 @@ function buildTimelineSegs(flights: UiFlight[]): { segs: Seg[]; totalMin: number
     segs.push({ type: "flight", index: i, leftPct, widthPct, flight: fl })
     cursor += fl.dur
     if (i < flights.length - 1 && fl.conn && fl.conn > 0) {
-      const layLeft = (cursor / totalMin) * 100
-      const layWidth = (fl.conn / totalMin) * 100
-      segs.push({ type: "layover", leftPct: layLeft, widthPct: layWidth, duration: fl.conn })
       cursor += fl.conn
     }
   })
@@ -75,16 +70,6 @@ export function TimelineBar({ flights, showLegs = true }: { flights: UiFlight[];
               <div key={`tick-${i}`} className="t-tick" style={{ left: `${b.pct}%` }} />
             ))}
             {segs.map((seg, i) => {
-              if (seg.type === "layover") {
-                return (
-                  <div
-                    key={`lay-${i}`}
-                    className="t-seg t-seg--layover"
-                    style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%` }}
-                    title={`Layover: ${fmtDur(seg.duration)}`}
-                  />
-                )
-              }
               const fl = seg.flight
               const isLastFlight = seg.index === flights.length - 1
               return (
