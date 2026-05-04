@@ -9,8 +9,8 @@ function fmtPrice(price: number, currency = "EUR"): string {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
     currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(price)
 }
 

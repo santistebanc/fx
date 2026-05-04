@@ -23,9 +23,21 @@ bun install
 ## Web UI
 
 - Open the URL logged by `bun run web` (e.g. `http://127.0.0.1:3010`).
-- **Sources**: Skyscanner and/or Kiwi (checkboxes). **Search flights** always hits live FlightsFinder (`POST /api/search`).
-- **Load demo snapshot** loads the saved JSON export in **`fixture.ts`** via **`GET /api/fixture-demo`** (no scrape); it also aligns the form fields with that snapshot’s `input`. The first server start after install parses that file once (large snapshots can add several seconds).
-- Successful responses are **merged in the browser** into a **single list**: trips ordered by **lowest best fare**, with booking chips grouped per itinerary. Failed feeds show as compact error strips above the combined results.
+- **Sources are fixed** to both **Skyscanner + Kiwi** (no picker). **Search flights** always hits live FlightsFinder (`POST /api/search`) with both feeds requested.
+- **Demo** loads the saved JSON export in **`fixture.ts`** via **`GET /api/fixture-demo`** (no scrape); it also aligns form fields with that snapshot’s `input`. The first server start after install parses that file once (large snapshots can add several seconds).
+- Successful responses are **merged in the browser** into a **single list**: trips ordered by **lowest best fare**, with booking offers grouped per itinerary.
+- Prices are normalized for display as **EUR** values (source payload prices are stored in cents).
+- Each itinerary timeline includes a **Show/Hide leg details** toggle for expandable leg rows beneath the bar.
+
+### Screenshots (current app state)
+
+Empty state:
+
+![fx app empty state](docs/screenshots/app-empty.png)
+
+Demo-loaded results state:
+
+![fx app results state](docs/screenshots/app-results.png)
 
 ## Scraping behavior (summary)
 
@@ -52,7 +64,8 @@ The **`bun run web`** process does **not** expose `/portal/*`. Use the standalon
 ## Layout
 
 - `skyscanner/`, `kiwi/` — config, HTTP requests, HTML extractors, `parseHtml`, `search.ts`, fake handlers.
-- `web/public/` — static UI (`app.ts` bundled to `/app.js`, `index.html`, `styles.css`).
+- `web/client/` — frontend app (`src/` components, transforms, styles entrypoint).
+- `web/public/` — shared/static styles and assets served by the web process.
 - `fixturePortal.ts` — reads sample HTML and portal cookie headers for tests and `bun run serve`.
 - `fixture.ts` — optional large demo snapshot (`export const fixture`) for **`GET /api/fixture-demo`** / UI button.
 - `scripts/demo.ts`, `scripts/verifyFixtures.ts` — CLI helpers.

@@ -52,14 +52,14 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   max-width: 1440px;
   margin: 0 auto;
 }
 
 .brand {
   font-family: var(--font-serif);
-  font-size: 1.05rem;
+  font-size: 1.35rem;
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--ink);
@@ -85,6 +85,14 @@ body {
   cursor: pointer;
   text-align: left;
   padding: 0;
+  flex: 0 1 auto;
+  min-width: fit-content;
+}
+
+.sf-group--airport {
+  flex: 1 1 11rem;
+  min-width: 0;
+  width: 100%;
 }
 .sf-label {
   font-size: 0.58rem;
@@ -115,6 +123,11 @@ body {
   min-width: 3ch;
   padding: 0;
   text-transform: uppercase;
+}
+.sf-group--airport .sf-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 .sf-input::placeholder { color: var(--muted); }
 

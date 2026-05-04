@@ -11,8 +11,8 @@ function fmtPrice(price: number): string {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
     currency: "EUR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(price)
 }
 
@@ -33,6 +33,13 @@ type SidebarProps = {
 export function Sidebar({ trips, filters, setFilter, currentTrip }: SidebarProps) {
   if (trips.length === 0) return <aside className="sidebar" />
 
+  const filteredTrips = trips.filter((t) =>
+    t.price <= filters.price &&
+    t.stats.duration <= filters.duration &&
+    t.stats.stops <= filters.stops &&
+    t.stats.layover <= filters.layover,
+  )
+
   const prices = trips.map(t => t.price)
   const durs = trips.map(t => t.stats.duration)
   const stops = trips.map(t => t.stats.stops)
@@ -42,7 +49,9 @@ export function Sidebar({ trips, filters, setFilter, currentTrip }: SidebarProps
   const maxPrice = Math.max(...prices)
   const minDur = Math.min(...durs)
   const maxDur = Math.max(...durs)
+  const minStops = filteredTrips.length > 0 ? Math.min(...filteredTrips.map(t => t.stats.stops)) : 0
   const maxStops = Math.max(...stops)
+  const minLayover = filteredTrips.length > 0 ? Math.min(...filteredTrips.map(t => t.stats.layover)) : 0
   const maxLayover = Math.max(...layovers)
 
   const tripPrice = currentTrip?.price ?? null
@@ -78,7 +87,7 @@ export function Sidebar({ trips, filters, setFilter, currentTrip }: SidebarProps
           <StatSlider
             label="Max Stops"
             value={filters.stops}
-            min={0}
+            min={minStops}
             max={maxStops}
             step={1}
             format={v => String(v)}
@@ -88,7 +97,7 @@ export function Sidebar({ trips, filters, setFilter, currentTrip }: SidebarProps
           <StatSlider
             label="Total Layover"
             value={filters.layover}
-            min={0}
+            min={minLayover}
             max={maxLayover}
             step={15}
             format={fmtDur}
