@@ -936,10 +936,6 @@ body {
   .timeline-wrap {
     padding-inline: 0;
   }
-
-  .t-seg-iata {
-    display: none;
-  }
 }
 
 .timeline-times-above,
@@ -1038,6 +1034,11 @@ body {
 
   .t-seg-iata {
     font-size: 0.64rem;
+  }
+
+  /* Hide connection-airport codes only; keep origin (first leg left) and final arrival */
+  .t-seg-iata--intermediate {
+    display: none;
   }
 }
 

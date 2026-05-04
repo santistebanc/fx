@@ -77,7 +77,7 @@ export function TimelineBar({
             {segs.map((seg) => {
               const fl = seg.flight
               const isFirstFlight = seg.index === 0
-              const isLastFlight = seg.index === flights.length - 1
+              const rightIsIntermediate = seg.index < flights.length - 1
               return (
                 <div
                   key={`fl-${seg.index}`}
@@ -85,8 +85,14 @@ export function TimelineBar({
                   style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%` }}
                   title={`${fl.from}→${fl.to}  ${fl.dep}–${fl.arr}  ${fmtDur(fl.dur)}`}
                 >
-                  {isFirstFlight && <span className="t-seg-iata t-seg-iata--left">{fl.from}</span>}
-                  {isLastFlight && <span className="t-seg-iata t-seg-iata--right">{fl.to}</span>}
+                  {isFirstFlight && (
+                    <span className="t-seg-iata t-seg-iata--left t-seg-iata--origin">{fl.from}</span>
+                  )}
+                  <span
+                    className={`t-seg-iata t-seg-iata--right${rightIsIntermediate ? " t-seg-iata--intermediate" : " t-seg-iata--endpoint"}`}
+                  >
+                    {fl.to}
+                  </span>
                 </div>
               )
             })}
