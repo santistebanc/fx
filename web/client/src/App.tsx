@@ -197,6 +197,10 @@ export function App() {
     }
 
     window.flyscan = { ...(window.flyscan ?? {}), loadDemo }
+    if (typeof window !== "undefined") {
+      const q = new URLSearchParams(window.location.search)
+      if (q.get("fixture") === "1") queueMicrotask(() => void loadDemo())
+    }
     return () => {
       const fs = window.flyscan
       if (fs?.loadDemo === loadDemo) delete fs.loadDemo

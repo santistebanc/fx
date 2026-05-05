@@ -5,7 +5,8 @@
   "private": true,
   "devDependencies": {
     "@effect/language-service": "^0.58.4",
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "playwright": "^1.49.1"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -25,6 +26,7 @@
     "serve": "bun run web/server.ts",
     "web": "bun run web/server.ts",
     "web:client": "bun run --cwd web/client dev",
-    "web:build": "bun run --cwd web/client build"
+    "web:build": "bun run --cwd web/client build",
+    "screenshot:readme": "bun run scripts/captureReadmeScreenshot.ts"
   }
 }

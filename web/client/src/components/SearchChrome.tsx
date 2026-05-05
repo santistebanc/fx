@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MutableRefObject } from "react"
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react"
 import { DateModal } from "./DateModal"
 import type { ApiPayload } from "../lib/transformApiResponse"
 import {
@@ -7,6 +7,7 @@ import {
   rememberAirport,
   type StoredAirport,
 } from "../lib/recentAirports"
+import { isIsoDate, readInitialSearchChromeState, saveLastSearch } from "../lib/lastSearch"
 
 type SearchChromeProps = {
   onSearch: (body: Record<string, unknown>) => Promise<void>
@@ -44,23 +45,25 @@ function fmtShort(iso: string): string {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })
 }
 
-function toIataOrBestEffort(raw: string): string {
+/** Valid IATA from typed text, or null if none can be resolved yet. */
+function parseAirportCode(raw: string): string | null {
   const trimmed = raw.trim()
+  if (!trimmed) return null
   const upper = trimmed.toUpperCase()
   if (/^[A-Z]{3}$/.test(upper)) return upper
   const inParens = upper.match(/\(([A-Z]{3})\)/)
   if (inParens?.[1]) return inParens[1]
   const anyCode = upper.match(/\b([A-Z]{3})\b/)
-  if (anyCode?.[1]) return anyCode[1]
-  return upper.slice(0, 3)
+  return anyCode?.[1] ?? null
 }
 
 export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromeProps) {
-  const [origin, setOrigin] = useState("BER")
-  const [destination, setDestination] = useState("MAD")
-  const [departureDate, setDepartureDate] = useState("2026-07-15")
-  const [returnDate, setReturnDate] = useState("2026-07-22")
-  const [roundTrip, setRoundTrip] = useState(true)
+  const initRef = useRef(readInitialSearchChromeState())
+  const [origin, setOrigin] = useState(initRef.current.origin)
+  const [destination, setDestination] = useState(initRef.current.destination)
+  const [departureDate, setDepartureDate] = useState(initRef.current.departureDate)
+  const [returnDate, setReturnDate] = useState(initRef.current.returnDate)
+  const [roundTrip, setRoundTrip] = useState(initRef.current.roundTrip)
   const [dateOpen, setDateOpen] = useState(false)
   const [originFocus, setOriginFocus] = useState(false)
   const [destinationFocus, setDestinationFocus] = useState(false)
@@ -84,14 +87,18 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
     if (!fixtureApplyRef) return
     fixtureApplyRef.current = (inp: NonNullable<ApiPayload["input"]>) => {
       if (inp.origin) {
-        const o = toIataOrBestEffort(inp.origin)
-        setOrigin(o)
-        if (/^[A-Z]{3}$/.test(o)) rememberAirport(o)
+        const o = parseAirportCode(inp.origin)
+        if (o) {
+          setOrigin(o)
+          rememberAirport(o)
+        } else setOrigin(inp.origin.trim())
       }
       if (inp.destination) {
-        const d = toIataOrBestEffort(inp.destination)
-        setDestination(d)
-        if (/^[A-Z]{3}$/.test(d)) rememberAirport(d)
+        const d = parseAirportCode(inp.destination)
+        if (d) {
+          setDestination(d)
+          rememberAirport(d)
+        } else setDestination(inp.destination.trim())
       }
       refreshRecents()
       if (inp.departureDate) setDepartureDate(inp.departureDate)
@@ -102,20 +109,49 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
         setRoundTrip(false)
         setReturnDate("")
       }
+
+      const fo = inp.origin ? parseAirportCode(inp.origin) : null
+      const fd = inp.destination ? parseAirportCode(inp.destination) : null
+      const dep = inp.departureDate?.trim() ?? ""
+      const rt = Boolean(inp.returnDate)
+      const ret = inp.returnDate ? String(inp.returnDate).trim() : ""
+      if (fo && fd && isIsoDate(dep) && (!rt || isIsoDate(ret))) {
+        saveLastSearch({
+          origin: fo,
+          destination: fd,
+          departureDate: dep,
+          returnDate: rt ? ret : "",
+          roundTrip: rt,
+        })
+      }
     }
     return () => {
       fixtureApplyRef.current = null
     }
   }, [fixtureApplyRef])
 
+  const originCode = parseAirportCode(origin)
+  const destinationCode = parseAirportCode(destination)
+  const datesOk =
+    isIsoDate(departureDate) && (!roundTrip || (returnDate.trim().length > 0 && isIsoDate(returnDate)))
+  const canSearch = Boolean(originCode && destinationCode && datesOk && !busy)
+
   async function handleSearch() {
-    const o = toIataOrBestEffort(origin)
-    const d = toIataOrBestEffort(destination)
+    const o = parseAirportCode(origin)
+    const d = parseAirportCode(destination)
+    if (!o || !d) return
     setOrigin(o)
     setDestination(d)
     rememberAirport(o)
     rememberAirport(d)
     refreshRecents()
+    saveLastSearch({
+      origin: o,
+      destination: d,
+      departureDate,
+      returnDate: roundTrip ? returnDate : "",
+      roundTrip,
+    })
     await onSearch({
       origin: o,
       destination: d,
@@ -238,9 +274,9 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
               onBlur={() => {
                 setOriginFocus(false)
                 const raw = origin.trim()
-                const n = toIataOrBestEffort(raw)
-                setOrigin(/^[A-Z]{3}$/.test(n) ? n : raw)
-                if (/^[A-Z]{3}$/.test(n)) rememberAirport(n)
+                const code = parseAirportCode(raw)
+                setOrigin(code ?? raw)
+                if (code) rememberAirport(code)
                 refreshRecents()
               }}
             />
@@ -284,9 +320,9 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
               onBlur={() => {
                 setDestinationFocus(false)
                 const raw = destination.trim()
-                const n = toIataOrBestEffort(raw)
-                setDestination(/^[A-Z]{3}$/.test(n) ? n : raw)
-                if (/^[A-Z]{3}$/.test(n)) rememberAirport(n)
+                const code = parseAirportCode(raw)
+                setDestination(code ?? raw)
+                if (code) rememberAirport(code)
                 refreshRecents()
               }}
             />
@@ -334,9 +370,15 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
           <button
             className="search-btn"
             type="button"
-            disabled={busy}
+            disabled={!canSearch}
             aria-busy={busy || undefined}
-            aria-label={busy ? "Searching" : "Search"}
+            aria-label={
+              busy
+                ? "Searching"
+                : !originCode || !destinationCode || !datesOk
+                  ? "Search (enter valid airports and dates)"
+                  : "Search"
+            }
             onClick={() => void handleSearch()}
           >
             <svg className="search-btn-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
