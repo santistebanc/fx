@@ -96,7 +96,8 @@ jobs:
           cd /opt/flyscan
           export PATH="\$HOME/.bun/bin:\$PATH"
           printf '%s\n' 'WEB_PORT=3010' "CORS_ORIGIN=https://${OWNER}.github.io" | sudo tee /etc/flyscan.env >/dev/null
-          bun install --frozen-lockfile
+          # Skip lifecycle scripts on VM deploys; root `prepare` can hang in non-interactive environments.
+          bun install --frozen-lockfile --ignore-scripts
           if systemctl is-active --quiet flyscan 2>/dev/null; then
             sudo systemctl restart flyscan
           else
