@@ -38,11 +38,11 @@ function parseStored(raw: string | null): LastSearchSnapshot | null {
   }
 }
 
-/** Dates used when nothing valid is stored yet (matches prior defaults). */
+/** Empty dates until user picks or restores from `readLastSearch()`. */
 export function defaultSearchDates(): Pick<LastSearchSnapshot, "departureDate" | "returnDate" | "roundTrip"> {
   return {
-    departureDate: "2026-07-15",
-    returnDate: "2026-07-22",
+    departureDate: "",
+    returnDate: "",
     roundTrip: true,
   }
 }
