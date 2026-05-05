@@ -5,8 +5,7 @@
  * POST /api/search runs live FlightsFinder scrapes only.
  * GET /api/fixture-demo returns the frozen snapshot from `fixture.ts` (demo UI button).
  *
- * For offline portal HTML used by CLI (`bun run demo` without --real), run `bun run serve`
- * on PORT — this process no longer embeds `/portal/*` fixtures.
+ * Canonical backend entrypoint for local, Railway, and GitHub deployments.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { stat } from "node:fs/promises"
@@ -216,7 +215,7 @@ const parseBody = (raw: ApiBody): { ok: false; error: string } | { ok: true; inp
   return { ok: true, input: decoded.right, sources }
 }
 
-const port = Number(process.env.WEB_PORT) || 3010
+const port = Number(process.env.PORT ?? process.env.WEB_PORT) || 3010
 
 Bun.serve({
   port,

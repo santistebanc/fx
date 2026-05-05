@@ -1,6 +1,6 @@
 {
   "name": "flyscan",
-  "module": "index.ts",
+  "module": "web/server.ts",
   "type": "module",
   "private": true,
   "devDependencies": {
@@ -18,10 +18,11 @@
   },
   "scripts": {
     "prepare": "effect-language-service patch",
+    "start": "bun run web/server.ts",
     "test": "bun test",
     "demo": "bun run scripts/demo.ts",
     "verify-fixtures": "bun run scripts/verifyFixtures.ts",
-    "serve": "bun run index.ts",
+    "serve": "bun run web/server.ts",
     "web": "bun run web/server.ts",
     "web:client": "bun run --cwd web/client dev",
     "web:build": "bun run --cwd web/client build"
