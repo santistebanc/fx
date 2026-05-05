@@ -1,12 +1,12 @@
-<h1 align="center">
-  <span>fly</span><span style="color:#ee7d59">scan</span>
+<h1 align="left">
+  <img src="docs/flyscan-logo.svg" alt="flyscan" width="280" height="64" />
 </h1>
 
-<p align="center">
+![flyscan UI — demo results with filters and itinerary timeline](docs/screenshots/app.png)
+
+<p align="left">
   <a href="https://flyscan.site"><strong>Live app: flyscan.site</strong></a>
 </p>
-
-![flyscan UI — demo results with filters and itinerary timeline](docs/screenshots/app.png)
 
 **flyscan** compares flight itineraries from **Skyscanner** and **Kiwi** by scraping FlightsFinder-style portal pages, then normalizing trips, deals, and flights into shared schemas. The web UI lets you filter by price, duration, and stops, and inspect each itinerary (route, legs, timeline) before opening a book link.
 
