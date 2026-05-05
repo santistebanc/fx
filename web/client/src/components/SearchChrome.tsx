@@ -334,12 +334,11 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
               <div className="airport-suggest airport-suggest--viewport" style={{ top: originSuggestTop }}>
                 {originSuggestions.map((s) => {
                   const isRecentRow = originRecentCodes.has(s.code)
-                  const labelDiffers = s.label.trim().toUpperCase() !== s.code
                   return (
                   <button
                     key={`${s.code}-${s.label}`}
                     type="button"
-                    className={`airport-suggest-item${isRecentRow ? " airport-suggest-item--recent airport-suggest-item--recent-row" : ""}`}
+                    className={`airport-suggest-item${isRecentRow ? " airport-suggest-item--recent" : ""}`}
                     onMouseDown={(e) => {
                       e.preventDefault()
                       setOrigin(s.code)
@@ -349,19 +348,8 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
                       setOriginFocus(false)
                     }}
                   >
-                    {isRecentRow ? (
-                      <>
-                        <span className="airport-suggest-location">{s.label}</span>
-                        {labelDiffers && (
-                          <span className="airport-suggest-code airport-suggest-code--badge">{s.code}</span>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <span className="airport-suggest-code">{s.code}</span>
-                        <span className="airport-suggest-label">{s.label}</span>
-                      </>
-                    )}
+                    <span className="airport-suggest-code">{s.code}</span>
+                    <span className="airport-suggest-label">{s.label}</span>
                   </button>
                   )
                 })}
@@ -395,12 +383,11 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
               <div className="airport-suggest airport-suggest--viewport" style={{ top: destSuggestTop }}>
                 {destinationSuggestions.map((s) => {
                   const isRecentRow = destinationRecentCodes.has(s.code)
-                  const labelDiffers = s.label.trim().toUpperCase() !== s.code
                   return (
                   <button
                     key={`${s.code}-${s.label}`}
                     type="button"
-                    className={`airport-suggest-item${isRecentRow ? " airport-suggest-item--recent airport-suggest-item--recent-row" : ""}`}
+                    className={`airport-suggest-item${isRecentRow ? " airport-suggest-item--recent" : ""}`}
                     onMouseDown={(e) => {
                       e.preventDefault()
                       setDestination(s.code)
@@ -410,19 +397,8 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
                       setDestinationFocus(false)
                     }}
                   >
-                    {isRecentRow ? (
-                      <>
-                        <span className="airport-suggest-location">{s.label}</span>
-                        {labelDiffers && (
-                          <span className="airport-suggest-code airport-suggest-code--badge">{s.code}</span>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <span className="airport-suggest-code">{s.code}</span>
-                        <span className="airport-suggest-label">{s.label}</span>
-                      </>
-                    )}
+                    <span className="airport-suggest-code">{s.code}</span>
+                    <span className="airport-suggest-label">{s.label}</span>
                   </button>
                   )
                 })}
@@ -448,7 +424,7 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
           <div className="search-divider" />
 
           <button
-            className="search-btn"
+            className={`search-btn${busy ? " search-btn--busy" : ""}`}
             type="button"
             disabled={!canSearch}
             aria-busy={busy || undefined}
@@ -461,12 +437,33 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
             }
             onClick={() => void handleSearch()}
           >
-            <svg className="search-btn-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
-              />
-            </svg>
+            {busy ? (
+              <svg
+                className="search-btn-spinner"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="9"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeDasharray="42 56"
+                />
+              </svg>
+            ) : (
+              <svg className="search-btn-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
+                />
+              </svg>
+            )}
             <span className="search-btn-label">{busy ? "Searching…" : "Search"}</span>
           </button>
         </div>

@@ -188,31 +188,6 @@ body {
   background: color-mix(in oklch, var(--accent) 10%, transparent);
 }
 
-.airport-suggest-item--recent-row {
-  align-items: flex-start;
-}
-
-.airport-suggest-location {
-  flex: 1;
-  min-width: 0;
-  font-weight: 600;
-  color: var(--ink);
-  line-height: 1.35;
-  text-align: left;
-}
-
-.airport-suggest-code--badge {
-  flex-shrink: 0;
-  align-self: flex-start;
-  margin-top: 0.06rem;
-  padding: 0.1rem 0.4rem;
-  border-radius: 2px;
-  background: color-mix(in oklch, var(--accent) 18%, transparent);
-  font-size: 0.78rem;
-  font-weight: 700;
-  min-width: unset;
-}
-
 .airport-suggest-code {
   font-weight: 700;
   color: var(--accent-hi);
@@ -250,8 +225,26 @@ body {
   flex-shrink: 0;
 }
 
+.search-btn-spinner {
+  display: block;
+  flex-shrink: 0;
+  animation: search-btn-spin 0.65s linear infinite;
+}
+
+@keyframes search-btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .search-btn:hover:not(:disabled) { filter: brightness(1.08); }
 .search-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.search-btn--busy:disabled {
+  opacity: 1;
+  cursor: wait;
+  filter: none;
+}
 
 @media (max-width: 768px) {
   .brand {
@@ -272,15 +265,20 @@ body {
 }
 
 @media (max-width: 520px) {
-  .search-btn:not(:disabled) .search-btn-icon {
+  .search-btn:not(:disabled):not(.search-btn--busy) .search-btn-icon {
     display: block;
   }
 
-  .search-btn:not(:disabled) .search-btn-label {
+  .search-btn:not(:disabled):not(.search-btn--busy) .search-btn-label {
     display: none;
   }
 
-  .search-btn:disabled .search-btn-icon {
+  .search-btn:disabled:not(.search-btn--busy) .search-btn-icon {
+    display: none;
+  }
+
+  /* Loading: icon-only spinner, no “Searching…” copy */
+  .search-btn--busy .search-btn-label {
     display: none;
   }
 
@@ -289,9 +287,22 @@ body {
     min-width: 2.25rem;
   }
 
-  .search-btn:disabled {
+  .search-btn:disabled:not(.search-btn--busy) {
     padding: 0.42rem 0.65rem;
     min-width: 0;
+  }
+
+  .search-btn--busy:disabled {
+    padding: 0.42rem 0.55rem;
+    min-width: 2.25rem;
+  }
+
+  .empty-state .empty-text {
+    display: none;
+  }
+
+  .airport-suggest-item--hint {
+    display: none;
   }
 }
 
@@ -913,7 +924,9 @@ body {
   }
 
   .timeline-wrap {
-    padding-inline: clamp(0.65rem, 4vw, 2rem);
+    --timeline-pad: clamp(1.85rem, 5vw + 0.35rem, 2.35rem);
+    padding-left: max(env(safe-area-inset-left, 0px), var(--timeline-pad));
+    padding-right: max(env(safe-area-inset-right, 0px), var(--timeline-pad));
   }
 
   .empty-state {
@@ -1002,13 +1015,10 @@ body {
   gap: 0;
   width: 100%;
   box-sizing: border-box;
-  padding-inline: clamp(0.9rem, 2.5vw, 1.5rem);
-}
-
-@media (max-width: 480px) {
-  .timeline-wrap {
-    padding-inline: 0;
-  }
+  /* Room for IATA labels drawn outside segment bounds (t-seg-iata--left / --right). */
+  --timeline-pad: clamp(1.65rem, 1rem + 2vw, 2rem);
+  padding-left: max(env(safe-area-inset-left, 0px), var(--timeline-pad));
+  padding-right: max(env(safe-area-inset-right, 0px), var(--timeline-pad));
 }
 
 .timeline-times-above,
