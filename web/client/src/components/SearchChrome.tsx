@@ -332,11 +332,14 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
             />
             {showOriginSuggestions && originSuggestTop !== undefined && (
               <div className="airport-suggest airport-suggest--viewport" style={{ top: originSuggestTop }}>
-                {originSuggestions.map((s) => (
+                {originSuggestions.map((s) => {
+                  const isRecentRow = originRecentCodes.has(s.code)
+                  const labelDiffers = s.label.trim().toUpperCase() !== s.code
+                  return (
                   <button
                     key={`${s.code}-${s.label}`}
                     type="button"
-                    className={`airport-suggest-item${originRecentCodes.has(s.code) ? " airport-suggest-item--recent" : ""}`}
+                    className={`airport-suggest-item${isRecentRow ? " airport-suggest-item--recent airport-suggest-item--recent-row" : ""}`}
                     onMouseDown={(e) => {
                       e.preventDefault()
                       setOrigin(s.code)
@@ -346,10 +349,22 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
                       setOriginFocus(false)
                     }}
                   >
-                    <span className="airport-suggest-code">{s.code}</span>
-                    <span className="airport-suggest-label">{s.label}</span>
+                    {isRecentRow ? (
+                      <>
+                        <span className="airport-suggest-location">{s.label}</span>
+                        {labelDiffers && (
+                          <span className="airport-suggest-code airport-suggest-code--badge">{s.code}</span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="airport-suggest-code">{s.code}</span>
+                        <span className="airport-suggest-label">{s.label}</span>
+                      </>
+                    )}
                   </button>
-                ))}
+                  )
+                })}
                 {originLoading && origin.trim().length >= 2 && (
                   <div className="airport-suggest-item airport-suggest-item--hint">Searching…</div>
                 )}
@@ -378,11 +393,14 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
             />
             {showDestinationSuggestions && destSuggestTop !== undefined && (
               <div className="airport-suggest airport-suggest--viewport" style={{ top: destSuggestTop }}>
-                {destinationSuggestions.map((s) => (
+                {destinationSuggestions.map((s) => {
+                  const isRecentRow = destinationRecentCodes.has(s.code)
+                  const labelDiffers = s.label.trim().toUpperCase() !== s.code
+                  return (
                   <button
                     key={`${s.code}-${s.label}`}
                     type="button"
-                    className={`airport-suggest-item${destinationRecentCodes.has(s.code) ? " airport-suggest-item--recent" : ""}`}
+                    className={`airport-suggest-item${isRecentRow ? " airport-suggest-item--recent airport-suggest-item--recent-row" : ""}`}
                     onMouseDown={(e) => {
                       e.preventDefault()
                       setDestination(s.code)
@@ -392,10 +410,22 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
                       setDestinationFocus(false)
                     }}
                   >
-                    <span className="airport-suggest-code">{s.code}</span>
-                    <span className="airport-suggest-label">{s.label}</span>
+                    {isRecentRow ? (
+                      <>
+                        <span className="airport-suggest-location">{s.label}</span>
+                        {labelDiffers && (
+                          <span className="airport-suggest-code airport-suggest-code--badge">{s.code}</span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="airport-suggest-code">{s.code}</span>
+                        <span className="airport-suggest-label">{s.label}</span>
+                      </>
+                    )}
                   </button>
-                ))}
+                  )
+                })}
                 {destinationLoading && destination.trim().length >= 2 && (
                   <div className="airport-suggest-item airport-suggest-item--hint">Searching…</div>
                 )}

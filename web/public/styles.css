@@ -188,6 +188,31 @@ body {
   background: color-mix(in oklch, var(--accent) 10%, transparent);
 }
 
+.airport-suggest-item--recent-row {
+  align-items: flex-start;
+}
+
+.airport-suggest-location {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.35;
+  text-align: left;
+}
+
+.airport-suggest-code--badge {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 0.06rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 2px;
+  background: color-mix(in oklch, var(--accent) 18%, transparent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  min-width: unset;
+}
+
 .airport-suggest-code {
   font-weight: 700;
   color: var(--accent-hi);

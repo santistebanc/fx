@@ -37,9 +37,11 @@ export function rememberAirport(code: string, label?: string): void {
   if (typeof localStorage === "undefined") return
   const c = code.trim().toUpperCase()
   if (!/^[A-Z]{3}$/.test(c)) return
-  const lbl = (label?.trim() || c).slice(0, 200)
+  const prevAll = readRecentAirports()
+  const existing = prevAll.find((x) => x.code === c)
+  const lbl = (label?.trim() || existing?.label || c).slice(0, 200)
   const now = Date.now()
-  const prev = readRecentAirports().filter((x) => x.code !== c)
+  const prev = prevAll.filter((x) => x.code !== c)
   const next = [{ code: c, label: lbl, usedAt: now }, ...prev].slice(0, MAX_RECENTS)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
 }
