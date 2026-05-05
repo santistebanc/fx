@@ -81,6 +81,9 @@ jobs:
           DEST="${SSH_USER}@${SSH_HOST}:/opt/flyscan/"
           SSH_OPTS="-o StrictHostKeyChecking=accept-new"
 
+          # Ensure remote has rsync; rsync over SSH needs it on both sides.
+          ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" 'command -v rsync >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y rsync)'
+
           rsync -az --delete -e "ssh ${SSH_OPTS}" \
             --exclude '.git' \
             --exclude 'node_modules' \
