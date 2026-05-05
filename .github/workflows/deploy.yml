@@ -1,0 +1,102 @@
+# Split deploy on push to `master`:
+# - Frontend: static build → GitHub Pages (project site at https://<owner>.github.io/<repo>/).
+# - Backend: rsync repo → GCP VM, `bun install`, restart systemd unit `flyscan`.
+#
+# Repository secrets (Settings → Secrets → Actions):
+#   BACKEND_PUBLIC_URL — API origin for the static site, no trailing slash (e.g. https://api.example.com or http://VM_IP:3010).
+#   SSH_HOST — VM hostname or IP.
+#   SSH_USER — SSH user (e.g. ubuntu).
+#   SSH_PRIVATE_KEY — private key for that user (full PEM, including BEGIN/END lines).
+#
+# One-time on the VM:
+#   - Install Bun: https://bun.sh
+#   - sudo mkdir -p /opt/flyscan && sudo chown "$USER" /opt/flyscan
+#   - Copy deploy/flyscan.service into /etc/systemd/system/, adjust User and Bun paths, then:
+#     sudo systemctl daemon-reload && sudo systemctl enable --now flyscan
+#
+# Enable GitHub Pages: Settings → Pages → Source: GitHub Actions.
+
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+
+concurrency:
+  group: deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install root deps (shared types used via web client build graph)
+        run: bun install --frozen-lockfile
+
+      - name: Build static client
+        run: bun run web:build
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_API_ORIGIN: ${{ secrets.BACKEND_PUBLIC_URL }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/public/dist
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Upload app and reload API
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          test -n "${SSH_HOST:-}" && test -n "${SSH_USER:-}" || { echo "Missing SSH_HOST or SSH_USER secrets"; exit 1; }
+
+          DEST="${SSH_USER}@${SSH_HOST}:/opt/flyscan/"
+          SSH_OPTS="-o StrictHostKeyChecking=accept-new"
+
+          rsync -az --delete -e "ssh ${SSH_OPTS}" \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'web/client/node_modules' \
+            --exclude 'web/public/dist' \
+            ./ "$DEST"
+
+          ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" bash -s <<REMOTE
+          set -euo pipefail
+          cd /opt/flyscan
+          export PATH="\$HOME/.bun/bin:\$PATH"
+          printf '%s\n' 'WEB_PORT=3010' "CORS_ORIGIN=https://${OWNER}.github.io" | sudo tee /etc/flyscan.env >/dev/null
+          bun install --frozen-lockfile
+          if systemctl is-active --quiet flyscan 2>/dev/null; then
+            sudo systemctl restart flyscan
+          else
+            echo "Note: systemd unit 'flyscan' not active. Start it after installing deploy/flyscan.service"
+          fi
+          REMOTE

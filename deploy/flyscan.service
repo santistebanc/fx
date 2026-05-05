@@ -1,0 +1,19 @@
+[Unit]
+Description=flyscan API (Bun)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Change to the SSH user that owns /opt/flyscan
+User=ubuntu
+WorkingDirectory=/opt/flyscan
+EnvironmentFile=/etc/flyscan.env
+# Use ./ so Bun resolves a file; `bun run web/server.ts` can be mis-resolved. Prefer absolute path if you like.
+# Adjust the bun path to match: `which bun` as the service User.
+ExecStart=/home/ubuntu/.bun/bin/bun ./web/server.ts
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

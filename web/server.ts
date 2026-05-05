@@ -25,6 +25,21 @@ const apiLog = (msg: string, detail?: Record<string, unknown>) => {
   else console.log(`[fx api] ${msg}`, detail)
 }
 
+/** Comma-separated list, e.g. `https://youruser.github.io` for GitHub Pages. Required for browser calls when the UI is on another origin. */
+const corsOrigins = (process.env.CORS_ORIGIN ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean)
+
+function mergeCors(req: Request, headers: Headers) {
+  if (corsOrigins.length === 0) return
+  const origin = req.headers.get("origin")
+  if (origin && corsOrigins.includes(origin)) {
+    headers.set("access-control-allow-origin", origin)
+    headers.set("vary", "Origin")
+  }
+}
+
 const distIndex = join(dir, "public", "dist", "index.html")
 
 const htmlResponse = (body: string, type: string) =>
@@ -35,11 +50,14 @@ const htmlResponse = (body: string, type: string) =>
     },
   })
 
-const jsonResponse = (data: unknown, status = 200) =>
-  new Response(JSON.stringify(data), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+const jsonResponse = (req: Request, data: unknown, status = 200) => {
+  const headers = new Headers({
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
   })
+  mergeCors(req, headers)
+  return new Response(JSON.stringify(data), { status, headers })
+}
 
 type SourceKey = "skyscanner" | "kiwi"
 
@@ -205,6 +223,19 @@ Bun.serve({
   async fetch(req) {
     const url = new URL(req.url)
 
+    if (req.method === "OPTIONS" && url.pathname.startsWith("/api")) {
+      const headers = new Headers({
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "Content-Type",
+        "access-control-max-age": "86400",
+      })
+      mergeCors(req, headers)
+      if (corsOrigins.length > 0 && !headers.get("access-control-allow-origin")) {
+        return new Response(null, { status: 403 })
+      }
+      return new Response(null, { status: 204, headers })
+    }
+
     if (req.method === "GET" && url.pathname === "/") {
       try {
         await stat(distIndex)
@@ -239,8 +270,8 @@ Bun.serve({
     if (req.method === "GET" && url.pathname === "/api/fixture-demo") {
       apiLog("GET /api/fixture-demo")
       const fixtureInput = fixture.input
-      if (!fixtureInput) return jsonResponse(fixture)
-      return jsonResponse({
+      if (!fixtureInput) return jsonResponse(req, fixture)
+      return jsonResponse(req, {
         ...fixture,
         sources: fixture.sources?.map((source) =>
           source.ok
@@ -255,12 +286,12 @@ Bun.serve({
       try {
         body = (await req.json()) as ApiBody
       } catch {
-        return jsonResponse({ error: "Invalid JSON body" }, 400)
+        return jsonResponse(req, { error: "Invalid JSON body" }, 400)
       }
 
       const parsed = parseBody(body)
       if (!parsed.ok) {
-        return jsonResponse({ error: parsed.error }, 400)
+        return jsonResponse(req, { error: parsed.error }, 400)
       }
 
       const { input, sources } = parsed
@@ -305,7 +336,7 @@ Bun.serve({
             : { source: r.source, ok: false, error: r.error }
         ),
       })
-      return jsonResponse(payload)
+      return jsonResponse(req, payload)
     }
 
     return new Response("Not found", { status: 404 })

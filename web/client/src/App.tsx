@@ -7,6 +7,9 @@ import { TimelineBar } from "./components/TimelineBar"
 import { BookModal } from "./components/BookModal"
 import { transformApiResponse, type ApiPayload, type UiTrip } from "./lib/transformApiResponse"
 
+const apiOrigin = (import.meta.env.VITE_API_ORIGIN ?? "").replace(/\/$/, "")
+const apiUrl = (path: string) => `${apiOrigin}${path}`
+
 type TimelineRange = { start: number; end: number }
 /** Percent offset from orbit center (50%) — matches `--loader-radius: calc(var(--plane-size) * 0.44)` */
 const LOADER_RADIUS_PCT = 44
@@ -163,7 +166,7 @@ export function App() {
     setStatus("loading")
     setErrorMsg("")
     try {
-      const res = await fetch("/api/search", {
+      const res = await fetch(apiUrl("/api/search"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -182,7 +185,7 @@ export function App() {
     setStatus("loading")
     setErrorMsg("")
     try {
-      const res = await fetch("/api/fixture-demo")
+      const res = await fetch(apiUrl("/api/fixture-demo"))
       const data = await res.json().catch(() => ({})) as ApiPayload
       console.log("[flyscan] /api/fixture-demo response", data)
       if (!res.ok) throw new Error((data as { error?: string }).error || res.statusText)

@@ -7,6 +7,8 @@ import { defineConfig } from "vite"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
+  /** GitHub project sites use `/repo-name/`; leave default `/` for dev or root hosting. */
+  base: process.env.VITE_BASE ?? "/",
   plugins: [react(), tailwindcss()],
   root: __dirname,
   /** Styles are imported from `../../public/styles.css` in `src/index.css`; avoid duplicating `outDir` into `public/`. */
