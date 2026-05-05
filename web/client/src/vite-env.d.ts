@@ -9,3 +9,8 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+interface Window {
+  /** Dev helper: `await window.flyscan.loadDemo()` — loads fixture snapshot (API or bundled fallback). */
+  flyscan?: { loadDemo: () => Promise<void> }
+}

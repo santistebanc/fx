@@ -3,7 +3,7 @@
  * Run: bun run web   (default http://localhost:3010)
  *
  * POST /api/search runs live FlightsFinder scrapes only.
- * GET /api/fixture-demo returns the frozen snapshot from `fixture.ts` (demo UI button).
+ * GET /api/fixture-demo returns the frozen snapshot from `fixture.ts`.
  *
  * Canonical backend entrypoint for local, Railway, and GitHub deployments.
  */
@@ -66,6 +66,11 @@ type ApiBody = {
   departureDate?: unknown
   returnDate?: unknown
   sources?: unknown
+}
+
+type AirportSuggestion = {
+  code: string
+  label: string
 }
 
 type DealRow = { trip: string }
@@ -215,6 +220,44 @@ const parseBody = (raw: ApiBody): { ok: false; error: string } | { ok: true; inp
   return { ok: true, input: decoded.right, sources }
 }
 
+const AIRPORT_AUTOCOMPLETE_URL = "https://www.flightsfinder.com/ajax/ac/airports"
+
+const extractIata = (raw: string): string | null => {
+  const upper = raw.toUpperCase()
+  const inParens = upper.match(/\(([A-Z]{3})\)/)
+  if (inParens?.[1]) return inParens[1]
+  const anyCode = upper.match(/\b([A-Z]{3})\b/)
+  return anyCode?.[1] ?? null
+}
+
+const parseAirportSuggestions = (raw: unknown): AirportSuggestion[] => {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item): AirportSuggestion | null => {
+      if (typeof item === "string") {
+        const code = extractIata(item)
+        if (!code) return null
+        return { code, label: item.trim() }
+      }
+      if (!item || typeof item !== "object") return null
+      const rec = item as Record<string, unknown>
+      const codeCandidates = [rec.code, rec.iata, rec.value, rec.label, rec.name]
+        .filter((v): v is string => typeof v === "string")
+        .map((v) => extractIata(v))
+        .filter((v): v is string => Boolean(v))
+      const code = codeCandidates.find((c) => /^[A-Z]{3}$/.test(c))
+
+      const labelCandidates = [rec.label, rec.name, rec.text, rec.display_name, rec.value]
+        .filter((v): v is string => typeof v === "string")
+        .map((v) => v.trim())
+      const label = labelCandidates.find((l) => l.length > 0)
+
+      if (!code || !label) return null
+      return { code, label }
+    })
+    .filter((s): s is AirportSuggestion => Boolean(s))
+}
+
 const port = Number(process.env.PORT ?? process.env.WEB_PORT) || 3010
 
 Bun.serve({
@@ -278,6 +321,23 @@ Bun.serve({
             : source
         ),
       })
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/airports") {
+      const term = (url.searchParams.get("term") ?? "").trim()
+      if (term.length < 2) return jsonResponse(req, { suggestions: [] })
+
+      try {
+        const upstream = await fetch(`${AIRPORT_AUTOCOMPLETE_URL}?term=${encodeURIComponent(term)}`)
+        if (!upstream.ok) {
+          return jsonResponse(req, { error: "Airport autocomplete upstream failed" }, 502)
+        }
+        const payload = await upstream.json().catch(() => null)
+        const suggestions = parseAirportSuggestions(payload).slice(0, 10)
+        return jsonResponse(req, { suggestions })
+      } catch {
+        return jsonResponse(req, { error: "Airport autocomplete unavailable" }, 502)
+      }
     }
 
     if (req.method === "POST" && url.pathname === "/api/search") {

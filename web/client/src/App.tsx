@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react"
+import { useEffect, useRef, useState, type CSSProperties } from "react"
 import { SearchChrome } from "./components/SearchChrome"
 import type { Filters } from "./components/Sidebar"
 import { StatSlider } from "./components/StatSlider"
@@ -162,6 +162,47 @@ export function App() {
     setStatus("idle")
   }
 
+  const loadPayloadRef = useRef(loadPayload)
+  loadPayloadRef.current = loadPayload
+
+  const fixtureApplyRef = useRef<((inp: NonNullable<ApiPayload["input"]>) => void) | null>(null)
+
+  useEffect(() => {
+    const loadDemo = async () => {
+      setStatus("loading")
+      setErrorMsg("")
+      try {
+        let data: ApiPayload | null = null
+        try {
+          const res = await fetch(apiUrl("/api/fixture-demo"))
+          const remote = await res.json().catch(() => ({})) as ApiPayload
+          console.log("[flyscan] /api/fixture-demo response", remote)
+          if (res.ok) data = remote
+        } catch {
+          // Backend may be unavailable on static-only deploys; fall through to local fixture.
+        }
+
+        if (!data) {
+          const local = await import("@fx/fixture")
+          data = local.fixture as ApiPayload
+          console.log("[flyscan] local fixture fallback", data)
+        }
+
+        if (data.input) fixtureApplyRef.current?.(data.input)
+        loadPayloadRef.current(data)
+      } catch (err) {
+        setStatus("error")
+        setErrorMsg(err instanceof Error ? err.message : String(err))
+      }
+    }
+
+    window.flyscan = { ...(window.flyscan ?? {}), loadDemo }
+    return () => {
+      const fs = window.flyscan
+      if (fs?.loadDemo === loadDemo) delete fs.loadDemo
+    }
+  }, [])
+
   async function onSearch(body: Record<string, unknown>) {
     setStatus("loading")
     setErrorMsg("")
@@ -174,22 +215,6 @@ export function App() {
       const data = await res.json().catch(() => ({})) as ApiPayload
       console.log("[flyscan] /api/search response", data)
       if (!res.ok) throw new Error((data as { error?: string }).error || res.statusText)
-      loadPayload(data)
-    } catch (err) {
-      setStatus("error")
-      setErrorMsg(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  async function onDemo(applyInput?: (inp: NonNullable<ApiPayload["input"]>) => void) {
-    setStatus("loading")
-    setErrorMsg("")
-    try {
-      const res = await fetch(apiUrl("/api/fixture-demo"))
-      const data = await res.json().catch(() => ({})) as ApiPayload
-      console.log("[flyscan] /api/fixture-demo response", data)
-      if (!res.ok) throw new Error((data as { error?: string }).error || res.statusText)
-      if (data.input && applyInput) applyInput(data.input)
       loadPayload(data)
     } catch (err) {
       setStatus("error")
@@ -226,7 +251,7 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <SearchChrome onSearch={onSearch} onDemo={onDemo} busy={status === "loading"} />
+      <SearchChrome onSearch={onSearch} busy={status === "loading"} fixtureApplyRef={fixtureApplyRef} />
 
       <div className="workspace">
         <main className="main-col">
@@ -272,7 +297,7 @@ export function App() {
           {status === "idle" && allTrips.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon">✈</div>
-              <p className="empty-text">Run a search or load the demo snapshot to view trips.</p>
+              <p className="empty-text">Run a search to view trips.</p>
             </div>
           )}
 

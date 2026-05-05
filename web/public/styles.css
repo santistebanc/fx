@@ -95,6 +95,7 @@ body {
   flex: 1 1 11rem;
   min-width: 0;
   width: 100%;
+  position: relative;
 }
 .sf-label {
   font-size: 0.58rem;
@@ -133,6 +134,59 @@ body {
 }
 .sf-input::placeholder { color: var(--muted); }
 
+.airport-suggest {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  right: 0;
+  background: var(--surface-card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  max-height: 15rem;
+  overflow-y: auto;
+  z-index: 30;
+}
+
+.airport-suggest-item {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  padding: 0.45rem 0.55rem;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.airport-suggest-item:hover {
+  background: var(--surface-raised);
+}
+
+.airport-suggest-item--hint {
+  color: var(--muted);
+  cursor: default;
+}
+
+.airport-suggest-item--recent {
+  background: color-mix(in oklch, var(--accent) 10%, transparent);
+}
+
+.airport-suggest-code {
+  font-weight: 700;
+  color: var(--accent-hi);
+  min-width: 2.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.airport-suggest-label {
+  color: var(--ink);
+  opacity: 0.92;
+}
+
 .search-btn {
   margin-left: auto;
   display: inline-flex;
@@ -170,10 +224,6 @@ body {
     display: none;
   }
 
-  .demo-btn {
-    display: none;
-  }
-
   .search-bar {
     padding: 0.5rem 1rem;
   }
@@ -206,21 +256,6 @@ body {
     min-width: 0;
   }
 }
-
-.demo-btn {
-  padding: 0.42rem 0.85rem;
-  background: var(--surface-card);
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 600;
-  border: 1px solid var(--line);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: border-color 0.12s, color 0.12s;
-}
-.demo-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.demo-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* ── WORKSPACE ── */
 .workspace {
