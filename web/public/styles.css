@@ -149,6 +149,19 @@ body {
   z-index: 30;
 }
 
+/* Full-viewport width; `top` set inline from input anchor */
+.airport-suggest.airport-suggest--viewport {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: auto;
+  margin: 0;
+  box-sizing: border-box;
+  padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+  z-index: 100;
+}
+
 .airport-suggest-item {
   display: flex;
   gap: 0.5rem;

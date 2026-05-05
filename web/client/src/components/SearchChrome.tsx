@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react"
 import { DateModal } from "./DateModal"
 import type { ApiPayload } from "../lib/transformApiResponse"
 import {
@@ -254,6 +262,48 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
   const showDestinationSuggestions =
     destinationFocus && (destinationLoading || destinationSuggestions.length > 0)
 
+  const originWrapRef = useRef<HTMLDivElement>(null)
+  const destWrapRef = useRef<HTMLDivElement>(null)
+  const [originSuggestTop, setOriginSuggestTop] = useState<number | undefined>(undefined)
+  const [destSuggestTop, setDestSuggestTop] = useState<number | undefined>(undefined)
+
+  const syncSuggestPositions = useCallback(() => {
+    const gapPx = 5
+    if (showOriginSuggestions && originWrapRef.current) {
+      const r = originWrapRef.current.getBoundingClientRect()
+      setOriginSuggestTop(Math.round(r.bottom + gapPx))
+    } else {
+      setOriginSuggestTop(undefined)
+    }
+    if (showDestinationSuggestions && destWrapRef.current) {
+      const r = destWrapRef.current.getBoundingClientRect()
+      setDestSuggestTop(Math.round(r.bottom + gapPx))
+    } else {
+      setDestSuggestTop(undefined)
+    }
+  }, [showDestinationSuggestions, showOriginSuggestions])
+
+  useLayoutEffect(() => {
+    syncSuggestPositions()
+  }, [
+    syncSuggestPositions,
+    originLoading,
+    destinationLoading,
+    originSuggestions.length,
+    destinationSuggestions.length,
+  ])
+
+  useEffect(() => {
+    if (!showOriginSuggestions && !showDestinationSuggestions) return
+    syncSuggestPositions()
+    window.addEventListener("resize", syncSuggestPositions)
+    window.addEventListener("scroll", syncSuggestPositions, true)
+    return () => {
+      window.removeEventListener("resize", syncSuggestPositions)
+      window.removeEventListener("scroll", syncSuggestPositions, true)
+    }
+  }, [syncSuggestPositions, showOriginSuggestions, showDestinationSuggestions])
+
   return (
     <>
       <header className="search-bar">
@@ -261,7 +311,7 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
           <span className="brand">fly<span>scan</span></span>
           <div className="search-divider" />
 
-          <div className="sf-group sf-group--airport">
+          <div className="sf-group sf-group--airport" ref={originWrapRef}>
             <span className="sf-label">FROM</span>
             <input
               className="sf-val sf-input"
@@ -280,8 +330,8 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
                 refreshRecents()
               }}
             />
-            {showOriginSuggestions && (
-              <div className="airport-suggest">
+            {showOriginSuggestions && originSuggestTop !== undefined && (
+              <div className="airport-suggest airport-suggest--viewport" style={{ top: originSuggestTop }}>
                 {originSuggestions.map((s) => (
                   <button
                     key={`${s.code}-${s.label}`}
@@ -307,7 +357,7 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
             )}
           </div>
 
-          <div className="sf-group sf-group--airport">
+          <div className="sf-group sf-group--airport" ref={destWrapRef}>
             <span className="sf-label">TO</span>
             <input
               className="sf-val sf-input"
@@ -326,8 +376,8 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
                 refreshRecents()
               }}
             />
-            {showDestinationSuggestions && (
-              <div className="airport-suggest">
+            {showDestinationSuggestions && destSuggestTop !== undefined && (
+              <div className="airport-suggest airport-suggest--viewport" style={{ top: destSuggestTop }}>
                 {destinationSuggestions.map((s) => (
                   <button
                     key={`${s.code}-${s.label}`}
