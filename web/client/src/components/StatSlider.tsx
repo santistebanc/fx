@@ -15,6 +15,7 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
   const range = max - min
   const clamp = (v: number) => Math.min(Math.max(v, min), max)
   const knobValue = clamp(value)
+  const safeStep = step > 0 ? step : 1
 
   let fillLeftPct = 0
   let fillWidthPct = 100
@@ -71,7 +72,12 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
             max={max}
             step={step}
             value={value}
-            onChange={e => onChange(Number(e.target.value))}
+            onChange={e => {
+              const raw = Number(e.target.value)
+              // Range inputs cannot emit `max` if step doesn't divide (max - min).
+              // Snap near the right edge so users can always reach the hard limit.
+              onChange(raw >= max - safeStep ? max : raw)
+            }}
             aria-label={hideLabel ? label : undefined}
           />
         </div>
