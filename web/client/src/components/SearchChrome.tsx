@@ -7,6 +7,7 @@ import {
   useState,
   type MutableRefObject,
 } from "react"
+import { Link } from "react-router-dom"
 import { DateModal } from "./DateModal"
 import type { ApiPayload } from "../lib/transformApiResponse"
 import {
@@ -20,6 +21,14 @@ import { isIsoDate, readInitialSearchChromeState, saveLastSearch } from "../lib/
 type SearchChromeProps = {
   onSearch: (body: Record<string, unknown>) => Promise<void>
   busy: boolean
+  mode?: "hero" | "bar"
+  initialValues?: {
+    origin?: string
+    destination?: string
+    departureDate?: string
+    returnDate?: string
+    roundTrip?: boolean
+  }
   /** Filled by this component so the parent can apply fixture `input` from the devtools console. */
   fixtureApplyRef?: MutableRefObject<((inp: NonNullable<ApiPayload["input"]>) => void) | null>
 }
@@ -65,8 +74,18 @@ function parseAirportCode(raw: string): string | null {
   return anyCode?.[1] ?? null
 }
 
-export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromeProps) {
-  const initRef = useRef(readInitialSearchChromeState())
+export function SearchChrome({ onSearch, busy, mode = "bar", initialValues, fixtureApplyRef }: SearchChromeProps) {
+  const initRef = useRef(
+    initialValues?.origin
+      ? {
+          origin:        initialValues.origin        ?? "",
+          destination:   initialValues.destination   ?? "",
+          departureDate: initialValues.departureDate ?? "",
+          returnDate:    initialValues.returnDate     ?? "",
+          roundTrip:     initialValues.roundTrip     ?? Boolean(initialValues.returnDate),
+        }
+      : readInitialSearchChromeState()
+  )
   const [origin, setOrigin] = useState(initRef.current.origin)
   const [destination, setDestination] = useState(initRef.current.destination)
   const [departureDate, setDepartureDate] = useState(initRef.current.departureDate)
@@ -142,7 +161,7 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
   const destinationCode = parseAirportCode(destination)
   const datesOk =
     isIsoDate(departureDate) && (!roundTrip || (returnDate.trim().length > 0 && isIsoDate(returnDate)))
-  const canSearch = Boolean(originCode && destinationCode && datesOk && !busy)
+  const canSearch = Boolean(originCode && destinationCode && originCode !== destinationCode && datesOk && !busy)
 
   async function handleSearch() {
     const o = parseAirportCode(origin)
@@ -264,11 +283,19 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
 
   const originWrapRef = useRef<HTMLDivElement>(null)
   const destWrapRef = useRef<HTMLDivElement>(null)
+  const heroCardRef = useRef<HTMLDivElement>(null)
   const [originSuggestTop, setOriginSuggestTop] = useState<number | undefined>(undefined)
   const [destSuggestTop, setDestSuggestTop] = useState<number | undefined>(undefined)
+  const [heroSuggestRect, setHeroSuggestRect] = useState<{ left: number; right: number } | undefined>(undefined)
 
   const syncSuggestPositions = useCallback(() => {
     const gapPx = 5
+    if (heroCardRef.current) {
+      const r = heroCardRef.current.getBoundingClientRect()
+      setHeroSuggestRect({ left: Math.round(r.left), right: Math.round(window.innerWidth - r.right) })
+    } else {
+      setHeroSuggestRect(undefined)
+    }
     if (showOriginSuggestions && originWrapRef.current) {
       const r = originWrapRef.current.getBoundingClientRect()
       setOriginSuggestTop(Math.round(r.bottom + gapPx))
@@ -304,11 +331,183 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
     }
   }, [syncSuggestPositions, showOriginSuggestions, showDestinationSuggestions])
 
+  const originSuggestDropdown = showOriginSuggestions && originSuggestTop !== undefined ? (
+    <div className="airport-suggest airport-suggest--viewport" style={{ top: originSuggestTop, ...heroSuggestRect }}>
+      {originSuggestions.map((s) => {
+        const isRecentRow = originRecentCodes.has(s.code)
+        return (
+          <button
+            key={`${s.code}-${s.label}`}
+            type="button"
+            className={`airport-suggest-item${isRecentRow ? " airport-suggest-item--recent" : ""}`}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              setOrigin(s.code)
+              rememberAirport(s.code, s.label)
+              refreshRecents()
+              setOriginRemote([])
+              setOriginFocus(false)
+            }}
+          >
+            <span className="airport-suggest-code">{s.code}</span>
+            {s.label && s.label !== s.code && <span className="airport-suggest-label">{s.label}</span>}
+          </button>
+        )
+      })}
+      {originLoading && origin.trim().length >= 2 && (
+        <div className="airport-suggest-item airport-suggest-item--hint">Searching…</div>
+      )}
+    </div>
+  ) : null
+
+  const destSuggestDropdown = showDestinationSuggestions && destSuggestTop !== undefined ? (
+    <div className="airport-suggest airport-suggest--viewport" style={{ top: destSuggestTop, ...heroSuggestRect }}>
+      {destinationSuggestions.map((s) => {
+        const isRecentRow = destinationRecentCodes.has(s.code)
+        return (
+          <button
+            key={`${s.code}-${s.label}`}
+            type="button"
+            className={`airport-suggest-item${isRecentRow ? " airport-suggest-item--recent" : ""}`}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              setDestination(s.code)
+              rememberAirport(s.code, s.label)
+              refreshRecents()
+              setDestinationRemote([])
+              setDestinationFocus(false)
+            }}
+          >
+            <span className="airport-suggest-code">{s.code}</span>
+            {s.label && s.label !== s.code && <span className="airport-suggest-label">{s.label}</span>}
+          </button>
+        )
+      })}
+      {destinationLoading && destination.trim().length >= 2 && (
+        <div className="airport-suggest-item airport-suggest-item--hint">Searching…</div>
+      )}
+    </div>
+  ) : null
+
+  const searchBtnContent = busy ? (
+    <>
+      <svg className="search-btn-spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="42 56" />
+      </svg>
+      <span className="search-btn-label">Searching…</span>
+    </>
+  ) : (
+    <>
+      <svg className="search-btn-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+      </svg>
+      <span className="search-btn-label">Search</span>
+    </>
+  )
+
+  if (mode === "hero") {
+    return (
+      <>
+        <div className="search-hero">
+          <div className="search-hero-inner">
+            <div className="search-hero-brand">
+              fly<span>scan</span>
+            </div>
+            <p className="search-hero-sub">Find the best flight deals across all providers.</p>
+            <div className="search-hero-card" ref={heroCardRef}>
+              <div className="search-hero-airports">
+                <div className="sf-group sf-group--airport" ref={originWrapRef}>
+                  <span className="sf-label">FROM</span>
+                  <input
+                    className="sf-val sf-input"
+                    value={origin}
+                    maxLength={40}
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    placeholder="BCN"
+                    onChange={e => setOrigin(e.target.value)}
+                    onFocus={() => setOriginFocus(true)}
+                    onBlur={() => {
+                      setOriginFocus(false)
+                      const raw = origin.trim()
+                      const code = parseAirportCode(raw)
+                      setOrigin(code ?? raw)
+                      if (code) rememberAirport(code)
+                      refreshRecents()
+                    }}
+                  />
+                  {originSuggestDropdown}
+                </div>
+                <div className="search-hero-arrow" aria-hidden="true">→</div>
+                <div className="sf-group sf-group--airport" ref={destWrapRef}>
+                  <span className="sf-label">TO</span>
+                  <input
+                    className="sf-val sf-input"
+                    value={destination}
+                    maxLength={40}
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    placeholder="LHR"
+                    onChange={e => setDestination(e.target.value)}
+                    onFocus={() => setDestinationFocus(true)}
+                    onBlur={() => {
+                      setDestinationFocus(false)
+                      const raw = destination.trim()
+                      const code = parseAirportCode(raw)
+                      setDestination(code ?? raw)
+                      if (code) rememberAirport(code)
+                      refreshRecents()
+                    }}
+                  />
+                  {destSuggestDropdown}
+                </div>
+              </div>
+              <div className="search-hero-bottom">
+                <button
+                  className="search-hero-date-btn"
+                  type="button"
+                  onClick={() => setDateOpen(true)}
+                >
+                  <span className="sf-label">DATES</span>
+                  <span className="sf-val">{dateSummary}</span>
+                </button>
+                <button
+                  className={`search-btn search-btn--hero${busy ? " search-btn--busy" : ""}`}
+                  type="button"
+                  disabled={!canSearch}
+                  aria-busy={busy || undefined}
+                  aria-label={busy ? "Searching" : !originCode || !destinationCode || !datesOk ? "Search (enter valid airports and dates)" : "Search"}
+                  onClick={() => void handleSearch()}
+                >
+                  {searchBtnContent}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {dateOpen && (
+          <DateModal
+            depDate={departureDate}
+            retDate={returnDate}
+            roundTrip={roundTrip}
+            onClose={() => setDateOpen(false)}
+            onApply={({ dep, ret, isRound }) => {
+              setDepartureDate(dep)
+              setReturnDate(ret)
+              setRoundTrip(isRound)
+              setDateOpen(false)
+            }}
+          />
+        )}
+      </>
+    )
+  }
+
   return (
     <>
       <header className="search-bar">
         <div className="search-row">
-          <span className="brand">fly<span>scan</span></span>
+          <Link to="/" className="brand">fly<span>scan</span></Link>
           <div className="search-divider" />
 
           <div className="sf-group sf-group--airport" ref={originWrapRef}>
@@ -330,34 +529,7 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
                 refreshRecents()
               }}
             />
-            {showOriginSuggestions && originSuggestTop !== undefined && (
-              <div className="airport-suggest airport-suggest--viewport" style={{ top: originSuggestTop }}>
-                {originSuggestions.map((s) => {
-                  const isRecentRow = originRecentCodes.has(s.code)
-                  return (
-                  <button
-                    key={`${s.code}-${s.label}`}
-                    type="button"
-                    className={`airport-suggest-item${isRecentRow ? " airport-suggest-item--recent" : ""}`}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setOrigin(s.code)
-                      rememberAirport(s.code, s.label)
-                      refreshRecents()
-                      setOriginRemote([])
-                      setOriginFocus(false)
-                    }}
-                  >
-                    <span className="airport-suggest-code">{s.code}</span>
-                    <span className="airport-suggest-label">{s.label}</span>
-                  </button>
-                  )
-                })}
-                {originLoading && origin.trim().length >= 2 && (
-                  <div className="airport-suggest-item airport-suggest-item--hint">Searching…</div>
-                )}
-              </div>
-            )}
+            {originSuggestDropdown}
           </div>
 
           <div className="sf-group sf-group--airport" ref={destWrapRef}>
@@ -379,34 +551,7 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
                 refreshRecents()
               }}
             />
-            {showDestinationSuggestions && destSuggestTop !== undefined && (
-              <div className="airport-suggest airport-suggest--viewport" style={{ top: destSuggestTop }}>
-                {destinationSuggestions.map((s) => {
-                  const isRecentRow = destinationRecentCodes.has(s.code)
-                  return (
-                  <button
-                    key={`${s.code}-${s.label}`}
-                    type="button"
-                    className={`airport-suggest-item${isRecentRow ? " airport-suggest-item--recent" : ""}`}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setDestination(s.code)
-                      rememberAirport(s.code, s.label)
-                      refreshRecents()
-                      setDestinationRemote([])
-                      setDestinationFocus(false)
-                    }}
-                  >
-                    <span className="airport-suggest-code">{s.code}</span>
-                    <span className="airport-suggest-label">{s.label}</span>
-                  </button>
-                  )
-                })}
-                {destinationLoading && destination.trim().length >= 2 && (
-                  <div className="airport-suggest-item airport-suggest-item--hint">Searching…</div>
-                )}
-              </div>
-            )}
+            {destSuggestDropdown}
           </div>
 
           <div className="search-divider" />
@@ -437,34 +582,7 @@ export function SearchChrome({ onSearch, busy, fixtureApplyRef }: SearchChromePr
             }
             onClick={() => void handleSearch()}
           >
-            {busy ? (
-              <svg
-                className="search-btn-spinner"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-              >
-                <circle
-                  cx="12"
-                  cy="12"
-                  r="9"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeDasharray="42 56"
-                />
-              </svg>
-            ) : (
-              <svg className="search-btn-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
-                />
-              </svg>
-            )}
-            <span className="search-btn-label">{busy ? "Searching…" : "Search"}</span>
+            {searchBtnContent}
           </button>
         </div>
       </header>

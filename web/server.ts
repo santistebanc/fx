@@ -258,6 +258,26 @@ const parseAirportSuggestions = (raw: unknown): AirportSuggestion[] => {
     .filter((s): s is AirportSuggestion => Boolean(s))
 }
 
+const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
+
+type CacheEntry = { payload: unknown; expiresAt: number }
+const searchCache = new Map<string, CacheEntry>()
+
+function cacheKey(input: SearchInput, sources: SourceKey[]): string {
+  return [input.origin, input.destination, input.departureDate, input.returnDate ?? "", [...sources].sort().join(",")].join("|")
+}
+
+function cacheGet(key: string): unknown | null {
+  const entry = searchCache.get(key)
+  if (!entry) return null
+  if (Date.now() > entry.expiresAt) { searchCache.delete(key); return null }
+  return entry.payload
+}
+
+function cacheSet(key: string, payload: unknown): void {
+  searchCache.set(key, { payload, expiresAt: Date.now() + CACHE_TTL_MS })
+}
+
 const port = Number(process.env.PORT ?? process.env.WEB_PORT) || 3010
 
 Bun.serve({
@@ -354,6 +374,13 @@ Bun.serve({
       }
 
       const { input, sources } = parsed
+      const key = cacheKey(input, sources)
+      const cached = cacheGet(key)
+      if (cached !== null) {
+        apiLog("POST /api/search cache hit", { origin: input.origin, destination: input.destination, departureDate: input.departureDate, returnDate: input.returnDate ?? null })
+        return jsonResponse(req, cached)
+      }
+
       const reqT0 = Date.now()
       apiLog("POST /api/search", {
         mode: "real",
@@ -383,6 +410,7 @@ Bun.serve({
             : { source: r.source, ok: false as const, error: r.error }
         ),
       }
+      cacheSet(key, payload)
       apiLog("response ready", {
         requestElapsedMs: Date.now() - reqT0,
         sources: settled.map((r) =>

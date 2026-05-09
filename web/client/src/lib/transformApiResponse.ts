@@ -119,7 +119,7 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
   const flightsById = new Map<string, ApiFlight>()
 
   for (const blk of blocks) {
-    for (const f of blk.flights) flightsById.set(f.id, f)
+    for (const f of blk.flights) if (!flightsById.has(f.id)) flightsById.set(f.id, f)
     for (const deal of blk.deals) {
       if (!dealsByTrip.has(deal.trip)) dealsByTrip.set(deal.trip, new Map())
       const euroPrice = Math.round(centsToEuros(deal.price))
@@ -128,7 +128,8 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
     }
     for (const leg of blk.legs) {
       if (!legsByTrip.has(leg.trip)) legsByTrip.set(leg.trip, [])
-      legsByTrip.get(leg.trip)!.push(leg)
+      const tripLegs = legsByTrip.get(leg.trip)!
+      if (!tripLegs.some(l => l.id === leg.id)) tripLegs.push(leg)
     }
   }
 

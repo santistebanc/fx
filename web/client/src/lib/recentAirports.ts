@@ -20,7 +20,7 @@ function safeParse(raw: string | null): StoredAirport[] {
         const label = typeof r.label === "string" ? r.label.trim() : ""
         const usedAt = typeof r.usedAt === "number" ? r.usedAt : 0
         if (!/^[A-Z]{3}$/.test(code)) return null
-        return { code, label: label || code, usedAt }
+        return { code, label, usedAt }
       })
       .filter((x): x is StoredAirport => Boolean(x))
   } catch {
@@ -39,7 +39,7 @@ export function rememberAirport(code: string, label?: string): void {
   if (!/^[A-Z]{3}$/.test(c)) return
   const prevAll = readRecentAirports()
   const existing = prevAll.find((x) => x.code === c)
-  const lbl = (label?.trim() || existing?.label || c).slice(0, 200)
+  const lbl = (label?.trim() || existing?.label || "").slice(0, 200)
   const now = Date.now()
   const prev = prevAll.filter((x) => x.code !== c)
   const next = [{ code: c, label: lbl, usedAt: now }, ...prev].slice(0, MAX_RECENTS)

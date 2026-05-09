@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react"
+import { Routes, Route, useNavigate, useSearchParams } from "react-router-dom"
 import { SearchChrome } from "./components/SearchChrome"
 import type { Filters } from "./components/Sidebar"
 import { StatSlider } from "./components/StatSlider"
@@ -10,17 +11,35 @@ import { transformApiResponse, type ApiPayload, type UiTrip } from "./lib/transf
 const apiOrigin = (import.meta.env.VITE_API_ORIGIN ?? "").replace(/\/$/, "")
 const apiUrl = (path: string) => `${apiOrigin}${path}`
 
+const CLIENT_CACHE_TTL = 60 * 60 * 1000 // 1 hour, matches server
+
+function searchCacheKey(origin: string, destination: string, dep: string, ret: string): string {
+  return `flyscan.search|${origin}|${destination}|${dep}|${ret}`
+}
+
+function searchCacheGet(key: string): ApiPayload | null {
+  try {
+    const raw = sessionStorage.getItem(key)
+    if (!raw) return null
+    const { payload, ts } = JSON.parse(raw) as { payload: ApiPayload; ts: number }
+    if (Date.now() - ts > CLIENT_CACHE_TTL) { sessionStorage.removeItem(key); return null }
+    return payload
+  } catch { return null }
+}
+
+function searchCacheSet(key: string, payload: ApiPayload): void {
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ payload, ts: Date.now() }))
+  } catch {}
+}
+
 type TimelineRange = { start: number; end: number }
-/** Percent offset from orbit center (50%) — matches `--loader-radius: calc(var(--plane-size) * 0.44)` */
 const LOADER_RADIUS_PCT = 44
 const LOADER_DOT_COUNT = 18
 const LOADER_DOTS = Array.from({ length: LOADER_DOT_COUNT }, (_, i) => {
   const angleDeg = -90 + (360 * i) / LOADER_DOT_COUNT
   const angle = (angleDeg * Math.PI) / 180
-  return {
-    x: 50 + Math.cos(angle) * LOADER_RADIUS_PCT,
-    y: 50 + Math.sin(angle) * LOADER_RADIUS_PCT,
-  }
+  return { x: 50 + Math.cos(angle) * LOADER_RADIUS_PCT, y: 50 + Math.sin(angle) * LOADER_RADIUS_PCT }
 })
 
 function fmtPrice(price: number, currency = "EUR"): string {
@@ -47,16 +66,6 @@ function filterTrips(trips: UiTrip[], filters: Filters): UiTrip[] {
   )
 }
 
-function defaultFilters(trips: UiTrip[]): Filters {
-  if (trips.length === 0) return { price: 9999999, duration: 9999, stops: 99, layover: 9999 }
-  return {
-    price: Math.max(...trips.map(t => t.price)),
-    duration: Math.max(...trips.map(t => t.stats.duration)),
-    stops: Math.max(...trips.map(t => t.stats.stops)),
-    layover: Math.max(...trips.map(t => t.stats.layover)),
-  }
-}
-
 function getTimelineRange(
   trips: UiTrip[],
   pickFlights: (trip: UiTrip) => UiTrip["outbound"]["flights"] | undefined,
@@ -64,48 +73,26 @@ function getTimelineRange(
   const bounds = trips
     .map(pickFlights)
     .filter((flights): flights is UiTrip["outbound"]["flights"] => Boolean(flights && flights.length > 0))
-    .map((flights) => ({
-      start: flights[0]!.depAt,
-      end: flights[flights.length - 1]!.arrAt,
-    }))
-
+    .map((flights) => ({ start: flights[0]!.depAt, end: flights[flights.length - 1]!.arrAt }))
   if (bounds.length === 0) return undefined
-
-  return {
-    start: Math.min(...bounds.map((b) => b.start)),
-    end: Math.max(...bounds.map((b) => b.end)),
-  }
+  return { start: Math.min(...bounds.map(b => b.start)), end: Math.max(...bounds.map(b => b.end)) }
 }
 
-// Trips are already score-sorted upstream. Find the best trip for each primary
-// stat using deterministic tie-breakers, locate those anchor trips in the
-// scored list, then take the longest prefix needed to include them all.
-// The filter envelope is the max of each stat across that prefix.
 function computeCutoff(trips: UiTrip[]): Filters {
   if (trips.length === 0) return { price: 9999999, duration: 9999, stops: 99, layover: 9999 }
-
   const cmpNum = (a: number, b: number) => a - b
   const byPrice = (a: UiTrip, b: UiTrip) =>
-    cmpNum(a.price, b.price) ||
-    cmpNum(a.stats.duration, b.stats.duration) ||
-    cmpNum(a.stats.stops, b.stats.stops) ||
-    cmpNum(a.stats.layover, b.stats.layover)
+    cmpNum(a.price, b.price) || cmpNum(a.stats.duration, b.stats.duration) ||
+    cmpNum(a.stats.stops, b.stats.stops) || cmpNum(a.stats.layover, b.stats.layover)
   const byDuration = (a: UiTrip, b: UiTrip) =>
-    cmpNum(a.stats.duration, b.stats.duration) ||
-    cmpNum(a.price, b.price) ||
-    cmpNum(a.stats.stops, b.stats.stops) ||
-    cmpNum(a.stats.layover, b.stats.layover)
+    cmpNum(a.stats.duration, b.stats.duration) || cmpNum(a.price, b.price) ||
+    cmpNum(a.stats.stops, b.stats.stops) || cmpNum(a.stats.layover, b.stats.layover)
   const byStops = (a: UiTrip, b: UiTrip) =>
-    cmpNum(a.stats.stops, b.stats.stops) ||
-    cmpNum(a.price, b.price) ||
-    cmpNum(a.stats.duration, b.stats.duration) ||
-    cmpNum(a.stats.layover, b.stats.layover)
+    cmpNum(a.stats.stops, b.stats.stops) || cmpNum(a.price, b.price) ||
+    cmpNum(a.stats.duration, b.stats.duration) || cmpNum(a.stats.layover, b.stats.layover)
   const byLayover = (a: UiTrip, b: UiTrip) =>
-    cmpNum(a.stats.layover, b.stats.layover) ||
-    cmpNum(a.price, b.price) ||
-    cmpNum(a.stats.duration, b.stats.duration) ||
-    cmpNum(a.stats.stops, b.stats.stops)
-
+    cmpNum(a.stats.layover, b.stats.layover) || cmpNum(a.price, b.price) ||
+    cmpNum(a.stats.duration, b.stats.duration) || cmpNum(a.stats.stops, b.stats.stops)
   const candidates = [
     [...trips].sort(byPrice)[0]!,
     [...trips].sort(byDuration)[0]!,
@@ -113,10 +100,9 @@ function computeCutoff(trips: UiTrip[]): Filters {
     [...trips].sort(byLayover)[0]!,
   ]
   const cutoffIndex = Math.max(
-    ...candidates.map((candidate) => trips.findIndex((trip) => trip.id === candidate.id)).filter((idx) => idx >= 0),
+    ...candidates.map(c => trips.findIndex(t => t.id === c.id)).filter(i => i >= 0),
   )
   const cutoffTrips = trips.slice(0, cutoffIndex + 1)
-
   return {
     price:    Math.max(...cutoffTrips.map(t => t.price)),
     duration: Math.max(...cutoffTrips.map(t => t.stats.duration)),
@@ -127,7 +113,42 @@ function computeCutoff(trips: UiTrip[]): Filters {
 
 type Status = "idle" | "loading" | "error"
 
+// ── Root ────────────────────────────────────────────────────────────────────
+
 export function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<HeroPage />} />
+      <Route path="/search" element={<SearchPage />} />
+    </Routes>
+  )
+}
+
+// ── Hero (landing) ───────────────────────────────────────────────────────────
+
+function HeroPage() {
+  const navigate = useNavigate()
+
+  async function onSearch(body: Record<string, unknown>) {
+    const p = new URLSearchParams()
+    if (body.origin)        p.set("from", String(body.origin))
+    if (body.destination)   p.set("to",   String(body.destination))
+    if (body.departureDate) p.set("dep",  String(body.departureDate))
+    if (body.returnDate)    p.set("ret",  String(body.returnDate))
+    navigate(`/search?${p}`)
+  }
+
+  return (
+    <div className="app-shell">
+      <SearchChrome onSearch={onSearch} busy={false} mode="hero" />
+    </div>
+  )
+}
+
+// ── Search (results) ─────────────────────────────────────────────────────────
+
+function SearchPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [allTrips, setAllTrips] = useState<UiTrip[]>([])
   const [filters, setFiltersState] = useState<Filters>({ price: 9999999, duration: 9999, stops: 99, layover: 9999 })
   const [idx, setIdx] = useState(0)
@@ -136,102 +157,45 @@ export function App() {
   const [bookOpen, setBookOpen] = useState(false)
   const [cutoffActive, setCutoffActive] = useState(true)
 
+  const urlFrom = searchParams.get("from") ?? ""
+  const urlTo   = searchParams.get("to")   ?? ""
+  const urlDep  = searchParams.get("dep")  ?? ""
+  const urlRet  = searchParams.get("ret")  ?? ""
+
+  // Ref so loadPayload can read URL overrides without stale closure issues
+  const urlOverridesRef = useRef({
+    price: searchParams.get("price"),
+    dur:   searchParams.get("dur"),
+    stops: searchParams.get("stops"),
+    lay:   searchParams.get("lay"),
+    tid:   searchParams.get("tid"),
+    full:  searchParams.get("full"),
+  })
+  urlOverridesRef.current = {
+    price: searchParams.get("price"),
+    dur:   searchParams.get("dur"),
+    stops: searchParams.get("stops"),
+    lay:   searchParams.get("lay"),
+    tid:   searchParams.get("tid"),
+    full:  searchParams.get("full"),
+  }
+
+  // True on first load so URL filter/idx overrides are applied once
+  const isFirstLoad = useRef(true)
+
   const cutoff = allTrips.length > 0 ? computeCutoff(allTrips) : null
 
   const setFilter = (key: keyof Filters, value: number) =>
     setFiltersState(f => ({ ...f, [key]: value }))
 
-  function toggleCutoff() {
-    if (!cutoff) return
-    if (cutoffActive) {
-      setCutoffActive(false)
-      setFiltersState({ price: absMaxPrice, duration: absMaxDur, stops: absMaxStops, layover: absMaxLay })
-    } else {
-      setCutoffActive(true)
-      setFiltersState(cutoff)
-    }
-  }
-
-  function loadPayload(payload: ApiPayload) {
-    const trips = transformApiResponse(payload)
-    const co = computeCutoff(trips)
-    setAllTrips(trips)
-    setFiltersState(co)
-    setCutoffActive(true)
-    setIdx(0)
-    setStatus("idle")
-  }
-
-  const loadPayloadRef = useRef(loadPayload)
-  loadPayloadRef.current = loadPayload
-
-  const fixtureApplyRef = useRef<((inp: NonNullable<ApiPayload["input"]>) => void) | null>(null)
-
-  useEffect(() => {
-    const loadDemo = async () => {
-      setStatus("loading")
-      setErrorMsg("")
-      try {
-        let data: ApiPayload | null = null
-        try {
-          const res = await fetch(apiUrl("/api/fixture-demo"))
-          const remote = await res.json().catch(() => ({})) as ApiPayload
-          console.log("[flyscan] /api/fixture-demo response", remote)
-          if (res.ok) data = remote
-        } catch {
-          // Backend may be unavailable on static-only deploys; fall through to local fixture.
-        }
-
-        if (!data) {
-          const local = await import("@fx/fixture")
-          data = local.fixture as ApiPayload
-          console.log("[flyscan] local fixture fallback", data)
-        }
-
-        if (data.input) fixtureApplyRef.current?.(data.input)
-        loadPayloadRef.current(data)
-      } catch (err) {
-        setStatus("error")
-        setErrorMsg(err instanceof Error ? err.message : String(err))
-      }
-    }
-
-    window.flyscan = { ...(window.flyscan ?? {}), loadDemo }
-    if (typeof window !== "undefined") {
-      const q = new URLSearchParams(window.location.search)
-      if (q.get("fixture") === "1") queueMicrotask(() => void loadDemo())
-    }
-    return () => {
-      const fs = window.flyscan
-      if (fs?.loadDemo === loadDemo) delete fs.loadDemo
-    }
-  }, [])
-
-  async function onSearch(body: Record<string, unknown>) {
-    setStatus("loading")
-    setErrorMsg("")
-    try {
-      const res = await fetch(apiUrl("/api/search"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json().catch(() => ({})) as ApiPayload
-      console.log("[flyscan] /api/search response", data)
-      if (!res.ok) throw new Error((data as { error?: string }).error || res.statusText)
-      loadPayload(data)
-    } catch (err) {
-      setStatus("error")
-      setErrorMsg(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  const visible = filterTrips(allTrips, filters)
-  const noMatch = allTrips.length > 0 && visible.length === 0
-  const clampedIdx = visible.length > 0 ? Math.min(idx, visible.length - 1) : 0
-  const trip = visible[clampedIdx] ?? allTrips[0] ?? null
-  const outboundRange = getTimelineRange(visible, (t) => t.outbound.flights)
-  const inboundRange = getTimelineRange(visible, (t) => t.inbound?.flights)
+  const visible      = filterTrips(allTrips, filters)
+  const noMatch      = allTrips.length > 0 && visible.length === 0
+  const clampedIdx   = visible.length > 0 ? Math.min(idx, visible.length - 1) : 0
+  const trip         = visible[clampedIdx] ?? allTrips[0] ?? null
+  // Timeline axis spans the "knobs at max" set so the range stays stable while dragging
+  const timelineTrips = cutoffActive && cutoff ? filterTrips(allTrips, cutoff) : allTrips
+  const outboundRange = getTimelineRange(timelineTrips, t => t.outbound.flights)
+  const inboundRange  = getTimelineRange(timelineTrips, t => t.inbound?.flights)
 
   const absMinDur   = allTrips.length > 0 ? Math.min(...allTrips.map(t => t.stats.duration)) : 0
   const absMaxDur   = allTrips.length > 0 ? Math.max(...allTrips.map(t => t.stats.duration)) : 0
@@ -249,18 +213,202 @@ export function App() {
 
   const priceStep = Math.max(1, Math.round((absMaxPrice - absMinPrice) / 100))
 
-  function navigate(dir: number) {
+  function toggleCutoff() {
+    if (!cutoff) return
+    if (cutoffActive) {
+      setCutoffActive(false)
+      setFiltersState({ price: absMaxPrice, duration: absMaxDur, stops: absMaxStops, layover: absMaxLay })
+    } else {
+      setCutoffActive(true)
+      setFiltersState(cutoff)
+    }
+  }
+
+  function navigateTrip(dir: number) {
     setIdx(Math.max(0, Math.min(visible.length - 1, clampedIdx + dir)))
   }
 
+  function loadPayload(payload: ApiPayload) {
+    const trips = transformApiResponse(payload)
+    const co = computeCutoff(trips)
+
+    let initialFilters = co
+    let initialIdx = 0
+    let initialCutoffActive = true
+
+    // Apply URL filter/index overrides on first load only
+    if (isFirstLoad.current) {
+      const u = urlOverridesRef.current
+      if (u.price != null || u.dur != null || u.stops != null || u.lay != null) {
+        initialFilters = {
+          price:    u.price != null ? Number(u.price) : co.price,
+          duration: u.dur   != null ? Number(u.dur)   : co.duration,
+          stops:    u.stops != null ? Number(u.stops)  : co.stops,
+          layover:  u.lay   != null ? Number(u.lay)   : co.layover,
+        }
+      }
+      // Restore cutoffActive from URL explicitly; default true (best data) for fresh searches
+      initialCutoffActive = u.full !== "1"
+      if (u.tid != null) {
+        const tidIdx = trips.findIndex(t => t.id === u.tid)
+        if (tidIdx >= 0) initialIdx = tidIdx
+      }
+      isFirstLoad.current = false
+    }
+
+    setAllTrips(trips)
+    setFiltersState(initialFilters)
+    setCutoffActive(initialCutoffActive)
+    setIdx(initialIdx)
+    setStatus("idle")
+  }
+
+  const loadPayloadRef = useRef(loadPayload)
+  loadPayloadRef.current = loadPayload
+
+  const fixtureApplyRef = useRef<((inp: NonNullable<ApiPayload["input"]>) => void) | null>(null)
+
+  async function loadDemo() {
+    setStatus("loading")
+    setErrorMsg("")
+    try {
+      let data: ApiPayload | null = null
+      try {
+        const res = await fetch(apiUrl("/api/fixture-demo"))
+        const remote = await res.json().catch(() => ({})) as ApiPayload
+        console.log("[flyscan] /api/fixture-demo response", remote)
+        if (res.ok) data = remote
+      } catch {
+        // Backend may be unavailable; fall through to local fixture.
+      }
+      if (!data) {
+        const local = await import("@fx/fixture")
+        data = local.fixture as ApiPayload
+        console.log("[flyscan] local fixture fallback", data)
+      }
+      if (data.input) fixtureApplyRef.current?.(data.input)
+      loadPayloadRef.current(data)
+    } catch (err) {
+      setStatus("error")
+      setErrorMsg(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const loadDemoRef = useRef(loadDemo)
+  loadDemoRef.current = loadDemo
+
+  async function doSearch(body: Record<string, unknown>) {
+    const key = searchCacheKey(
+      String(body.origin ?? ""),
+      String(body.destination ?? ""),
+      String(body.departureDate ?? ""),
+      String(body.returnDate ?? ""),
+    )
+    const cached = searchCacheGet(key)
+    if (cached) {
+      loadPayload(cached)
+      return
+    }
+    setStatus("loading")
+    setErrorMsg("")
+    try {
+      const res = await fetch(apiUrl("/api/search"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => ({})) as ApiPayload
+      console.log("[flyscan] /api/search response", data)
+      if (!res.ok) throw new Error((data as { error?: string }).error || res.statusText)
+      searchCacheSet(key, data)
+      loadPayload(data)
+    } catch (err) {
+      setStatus("error")
+      setErrorMsg(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const doSearchRef = useRef(doSearch)
+  doSearchRef.current = doSearch
+
+  async function onSearch(body: Record<string, unknown>) {
+    // Reset so next loadPayload won't re-apply old URL overrides
+    isFirstLoad.current = true
+    const p = new URLSearchParams()
+    if (body.origin)        p.set("from", String(body.origin))
+    if (body.destination)   p.set("to",   String(body.destination))
+    if (body.departureDate) p.set("dep",  String(body.departureDate))
+    if (body.returnDate)    p.set("ret",  String(body.returnDate))
+    setSearchParams(p, { replace: true })
+    await doSearch(body)
+  }
+
+  // Auto-trigger search from URL params on mount
+  const didAutoSearch = useRef(false)
+  useEffect(() => {
+    if (didAutoSearch.current) return
+    if (searchParams.get("fixture") === "1") {
+      didAutoSearch.current = true
+      void loadDemoRef.current()
+      return
+    }
+    if (urlFrom && urlTo && urlDep) {
+      didAutoSearch.current = true
+      void doSearchRef.current({
+        origin: urlFrom,
+        destination: urlTo,
+        departureDate: urlDep,
+        returnDate: urlRet || undefined,
+        sources: ["skyscanner", "kiwi"],
+      })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Sync filters, cutoff toggle, and trip index to URL whenever they change (results visible)
+  useEffect(() => {
+    if (status !== "idle" || allTrips.length === 0) return
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set("price", String(filters.price))
+      next.set("dur",   String(filters.duration))
+      next.set("stops", String(filters.stops))
+      next.set("lay",   String(filters.layover))
+      if (!cutoffActive) next.set("full", "1")
+      else next.delete("full")
+      const currentTripId = visible[clampedIdx]?.id
+      if (currentTripId) next.set("tid", currentTripId)
+      else next.delete("tid")
+      return next
+    }, { replace: true })
+  // clampedIdx is derived from idx+visible, include both
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, cutoffActive, clampedIdx, status, allTrips.length])
+
+  // Expose loadDemo on window for devtools
+  useEffect(() => {
+    window.flyscan = { loadDemo: () => loadDemoRef.current() }
+    return () => { window.flyscan = undefined }
+  }, [])
+
+  const initialValues = urlFrom && urlTo
+    ? { origin: urlFrom, destination: urlTo, departureDate: urlDep, returnDate: urlRet, roundTrip: Boolean(urlRet) }
+    : undefined
+
   return (
     <div className="app-shell">
-      <SearchChrome onSearch={onSearch} busy={status === "loading"} fixtureApplyRef={fixtureApplyRef} />
+      <SearchChrome
+        onSearch={onSearch}
+        busy={status === "loading"}
+        mode="bar"
+        initialValues={initialValues}
+        fixtureApplyRef={fixtureApplyRef}
+      />
 
       <div className="workspace">
         <main className="main-col">
           {status === "loading" && (
-            <div className="empty-state">
+            <div className="empty-state empty-state--fullscreen">
               <div
                 className="loading-plane"
                 aria-hidden="true"
@@ -271,13 +419,7 @@ export function App() {
                     <span
                       key={i}
                       className="loading-plane__dot"
-                      style={
-                        {
-                          left: `${dot.x}%`,
-                          top: `${dot.y}%`,
-                          ["--dot-i" as "--dot-i"]: i,
-                        } as CSSProperties
-                      }
+                      style={{ left: `${dot.x}%`, top: `${dot.y}%`, ["--dot-i" as "--dot-i"]: i } as CSSProperties}
                     />
                   ))}
                   <div className="loading-plane__carrier">
@@ -314,7 +456,7 @@ export function App() {
                     className="arrow-btn"
                     disabled={clampedIdx <= 0}
                     aria-label="Previous trip"
-                    onClick={() => navigate(-1)}
+                    onClick={() => navigateTrip(-1)}
                   >
                     <span className="arrow-btn-icon" aria-hidden="true">←</span>
                     <span className="arrow-btn-label">Prev</span>
@@ -324,7 +466,7 @@ export function App() {
                     className="arrow-btn"
                     disabled={clampedIdx >= visible.length - 1}
                     aria-label="Next trip"
-                    onClick={() => navigate(1)}
+                    onClick={() => navigateTrip(1)}
                   >
                     <span className="arrow-btn-label">Next</span>
                     <span className="arrow-btn-icon" aria-hidden="true">→</span>
@@ -342,9 +484,7 @@ export function App() {
                 )}
                 <div className="nav-spacer" />
                 {!noMatch && trip && (
-                  <button className="book-btn" onClick={() => setBookOpen(true)}>
-                    Book
-                  </button>
+                  <button className="book-btn" onClick={() => setBookOpen(true)}>Book</button>
                 )}
               </div>
 
@@ -360,12 +500,8 @@ export function App() {
                           </span>
                         </div>
                         <StatSlider
-                          label="Duration"
-                          hideLabel
-                          value={filters.duration}
-                          min={absMinDur}
-                          max={sliderMaxDur}
-                          step={30}
+                          label="Duration" hideLabel
+                          value={filters.duration} min={absMinDur} max={sliderMaxDur} step={30}
                           format={fmtDur}
                           onChange={v => setFilter("duration", v)}
                           tripValue={noMatch ? null : trip.stats.duration}
@@ -379,12 +515,8 @@ export function App() {
                           </span>
                         </div>
                         <StatSlider
-                          label="Layover"
-                          hideLabel
-                          value={filters.layover}
-                          min={absMinLay}
-                          max={sliderMaxLay}
-                          step={15}
+                          label="Layover" hideLabel
+                          value={filters.layover} min={absMinLay} max={sliderMaxLay} step={15}
                           format={fmtDur}
                           onChange={v => setFilter("layover", v)}
                           tripValue={noMatch ? null : trip.stats.layover}
@@ -396,11 +528,8 @@ export function App() {
                             <span className="stat-name">Stops</span>
                           </div>
                           <StopsFilterBar
-                            label="Stops"
-                            hideLabel
-                            value={filters.stops}
-                            min={absMinStops}
-                            max={sliderMaxStops}
+                            label="Stops" hideLabel
+                            value={filters.stops} min={absMinStops} max={sliderMaxStops}
                             onChange={v => setFilter("stops", v)}
                             tripValue={noMatch ? null : trip.stats.stops}
                           />
@@ -415,11 +544,8 @@ export function App() {
                               <span className="stat-name">Stops</span>
                             </div>
                             <StopsFilterBar
-                              label="Stops"
-                              hideLabel
-                              value={filters.stops}
-                              min={absMinStops}
-                              max={sliderMaxStops}
+                              label="Stops" hideLabel
+                              value={filters.stops} min={absMinStops} max={sliderMaxStops}
                               onChange={v => setFilter("stops", v)}
                               tripValue={noMatch ? null : trip.stats.stops}
                             />
@@ -433,12 +559,8 @@ export function App() {
                         </div>
                       </div>
                       <StatSlider
-                        label="Price"
-                        hideLabel
-                        value={filters.price}
-                        min={absMinPrice}
-                        max={sliderMaxPrice}
-                        step={priceStep}
+                        label="Price" hideLabel
+                        value={filters.price} min={absMinPrice} max={sliderMaxPrice} step={priceStep}
                         format={v => fmtPrice(v, trip.currency)}
                         onChange={v => setFilter("price", v)}
                         tripValue={noMatch ? null : trip.price}
