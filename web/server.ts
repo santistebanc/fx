@@ -309,6 +309,15 @@ Bun.serve({
         )
       }
     }
+    if (req.method === "GET" && url.pathname === "/favicon.svg") {
+      const file = join(dir, "public", "dist", "favicon.svg")
+      try {
+        await stat(file)
+        return new Response(Bun.file(file), { headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=86400" } })
+      } catch {
+        return new Response("Not found", { status: 404 })
+      }
+    }
     if (req.method === "GET" && url.pathname.startsWith("/assets/")) {
       const name = url.pathname.replace(/^\//, "")
       const file = join(dir, "public", "dist", name)

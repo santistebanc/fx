@@ -11,8 +11,7 @@ export default defineConfig({
   base: process.env.VITE_BASE ?? "/",
   plugins: [react(), tailwindcss()],
   root: __dirname,
-  /** Styles are imported from `../../public/styles.css` in `src/index.css`; avoid duplicating `outDir` into `public/`. */
-  publicDir: false,
+  publicDir: path.resolve(__dirname, "public"),
   resolve: {
     alias: {
       "@flyscan": path.resolve(__dirname, "../.."),
