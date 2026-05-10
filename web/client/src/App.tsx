@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react"
+import { useEffect, useRef, useState, type CSSProperties, type TouchEvent as ReactTouchEvent } from "react"
 import { Routes, Route, useNavigate, useSearchParams } from "react-router-dom"
 import { SearchChrome } from "./components/SearchChrome"
 import type { Filters } from "./components/Sidebar"
@@ -202,6 +202,7 @@ function SearchPage() {
   const [errorMsg, setErrorMsg] = useState("")
   const [bookOpen, setBookOpen] = useState(false)
   const [cutoffActive, setCutoffActive] = useState(true)
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null)
 
   const urlFrom = searchParams.get("from") ?? ""
   const urlTo   = searchParams.get("to")   ?? ""
@@ -282,6 +283,43 @@ function SearchPage() {
 
   function navigateTrip(dir: number) {
     setIdx(Math.max(0, Math.min(visible.length - 1, clampedIdx + dir)))
+  }
+
+  function shouldIgnoreSwipeTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof Element)) return false
+    return Boolean(target.closest(
+      "button, a, input, select, textarea, label, [role='button'], .timeline-scroll-shell, .timeline-actions, .stat-bar-wrap, .stops-filter-bar",
+    ))
+  }
+
+  function handleTripTouchStart(event: ReactTouchEvent<HTMLDivElement>) {
+    if (event.touches.length !== 1) {
+      swipeStartRef.current = null
+      return
+    }
+    if (shouldIgnoreSwipeTarget(event.target)) {
+      swipeStartRef.current = null
+      return
+    }
+    const touch = event.touches[0]
+    swipeStartRef.current = { x: touch.clientX, y: touch.clientY }
+  }
+
+  function handleTripTouchEnd(event: ReactTouchEvent<HTMLDivElement>) {
+    if (visible.length <= 1 || !swipeStartRef.current) return
+
+    const touch = event.changedTouches[0]
+    if (!touch) return
+
+    const dx = touch.clientX - swipeStartRef.current.x
+    const dy = touch.clientY - swipeStartRef.current.y
+    swipeStartRef.current = null
+
+    if (Math.abs(dx) < 56) return
+    if (Math.abs(dx) < Math.abs(dy) * 1.35) return
+
+    if (dx < 0 && clampedIdx < visible.length - 1) navigateTrip(1)
+    if (dx > 0 && clampedIdx > 0) navigateTrip(-1)
   }
 
   function loadPayload(payload: ApiPayload) {
@@ -585,7 +623,7 @@ function SearchPage() {
               </div>
 
               {trip && (
-                <div>
+                <div onTouchStart={handleTripTouchStart} onTouchEnd={handleTripTouchEnd}>
                   <div className="price-row">
                     <div className="trip-stat-filters">
                       <div className="trip-stat-stack">

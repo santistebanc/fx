@@ -1320,6 +1320,8 @@ body {
   .timeline-wrap {
     padding-top: 0.18rem;
     padding-bottom: 0.22rem;
+    padding-left: 0;
+    padding-right: 0;
   }
 
   .timeline-zoom-toggle {
@@ -1328,18 +1330,20 @@ body {
   }
 
   .timeline-scroll-shell {
+    width: calc(100% + 1.5rem);
+    margin-left: -0.75rem;
     overflow-x: clip;
     overflow-y: visible;
   }
 
-  .timeline-wrap--zoomed {
-    padding-left: 0;
-    padding-right: 0;
+  .timeline-scroll-inner {
+    box-sizing: border-box;
+    padding-left: max(env(safe-area-inset-left, 0px), 1.7rem);
+    padding-right: max(env(safe-area-inset-right, 0px), 1.7rem);
   }
 
   .timeline-wrap--zoomed .timeline-scroll-shell {
-    width: calc(100% + 1.5rem);
-    margin-left: -0.75rem;
+    overflow-x: auto;
   }
 
   .timeline-wrap--zoomed .timeline-scroll-inner {
