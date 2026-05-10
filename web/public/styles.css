@@ -1069,7 +1069,7 @@ body {
 }
 
 .timeline-zoom-toggle {
-  display: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 2.2rem;
@@ -1111,6 +1111,22 @@ body {
 
 .timeline-scroll-inner {
   width: 100%;
+}
+
+.timeline-wrap--zoomed .timeline-scroll-shell {
+  overflow-x: auto;
+  overflow-y: visible;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.timeline-wrap--zoomed .timeline-scroll-inner {
+  box-sizing: border-box;
+  width: max(200%, 56rem);
+  padding-left: max(env(safe-area-inset-left, 0px), 1.5rem);
+  padding-right: max(env(safe-area-inset-right, 0px), 1.5rem);
+  padding-bottom: 0.25rem;
 }
 
 .timeline-hour-labels {
@@ -1295,10 +1311,6 @@ body {
 .t-seg-iata--right { transform: translate(0.28rem, -50%); }
 
 @media (max-width: 640px) {
-  .timeline-zoom-toggle {
-    display: inline-flex;
-  }
-
   .timeline-wrap {
     padding-top: 0.18rem;
     padding-bottom: 0.22rem;
@@ -1322,18 +1334,12 @@ body {
   .timeline-wrap--zoomed .timeline-scroll-shell {
     width: calc(100% + 1.5rem);
     margin-left: -0.75rem;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
   }
 
   .timeline-wrap--zoomed .timeline-scroll-inner {
-    box-sizing: border-box;
     width: max(285vw, 50rem);
     padding-left: max(env(safe-area-inset-left, 0px), 1.9rem);
     padding-right: max(env(safe-area-inset-right, 0px), 1.9rem);
-    padding-bottom: 0.25rem;
   }
 
   .timeline-hour-labels {

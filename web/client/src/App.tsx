@@ -563,7 +563,7 @@ function SearchPage() {
                         {cutoffActive ? "use all data" : "use best data"}
                       </span>
                       <span className="cutoff-toggle-label cutoff-toggle-label--compact">
-                        {cutoffActive ? "show all" : "show best"}
+                        {cutoffActive ? "all" : "best"}
                       </span>
                     </button>
                   </div>
