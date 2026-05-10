@@ -94,6 +94,7 @@ export function TimelineBar({
     ...(flights.length > 0 ? buildSpanHourMarks(flights[flights.length - 1]!.arrAt, timelineRange.end, timelineRange) : []),
   ]
   const [legsExpanded, setLegsExpanded] = useState(false)
+  const [mobileZoomed, setMobileZoomed] = useState(false)
 
   const boundaries: Boundary[] = []
   flights.forEach((fl, i) => {
@@ -240,140 +241,156 @@ export function TimelineBar({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-      <div className="timeline-wrap">
-        <div className="timeline-track-wrap">
-          <div className="timeline-hour-labels">
-            {hourLabels.map((l, i) => (
-              <span key={`hlabel-${i}`} className="t-hour-label" style={{ left: `${l.pct}%` }}>
-                {l.label}
-              </span>
-            ))}
-          </div>
-          <div className="timeline-flight-labels timeline-flight-labels--top">
-            {aboveTimes.map((b, i) => (
-              <span
-                key={`dep-${i}`}
-                className={`t-time${b.isFirst ? " t-time--first" : ""}`}
-                style={{ left: `${b.pct}%` }}
-              >
-                {b.time}
-              </span>
-            ))}
-          </div>
-          <div className="timeline-flight-labels timeline-flight-labels--bottom">
-            {belowTimes.map((b, i) => (
-              <span
-                key={`arr-${i}`}
-                className={`t-time${b.isLast ? " t-time--last" : ""}`}
-                style={{ left: `${b.pct}%` }}
-              >
-                {b.time}
-              </span>
-            ))}
-          </div>
-          <div className="timeline-track">
-            {depKnob && arrKnob && (() => {
-              const totalMs = timelineRange.end - timelineRange.start
-              const depPct = Math.max(0, Math.min(100, ((depKnob.value - timelineRange.start) / totalMs) * 100))
-              const arrPct = Math.max(0, Math.min(100, ((arrKnob.value - timelineRange.start) / totalMs) * 100))
-              const depFront = depPct >= arrPct - 1
-              return (
-                <>
-                  <div className="t-filter-shade t-filter-shade--left" style={{ width: `${depPct}%` }} />
-                  <div className="t-filter-shade t-filter-shade--right" style={{ left: `${arrPct}%` }} />
-                  <div
-                    className="t-filter-knob"
-                    style={{ left: `${depPct}%` }}
-                    onPointerDown={(event) => startKnobDrag(event, "dep")}
+      <div className={`timeline-wrap${mobileZoomed ? " timeline-wrap--zoomed" : ""}`}>
+        <div className="timeline-scroll-shell">
+          <div className="timeline-scroll-inner">
+            <div className="timeline-track-wrap">
+              <div className="timeline-hour-labels">
+                {hourLabels.map((l, i) => (
+                  <span key={`hlabel-${i}`} className="t-hour-label" style={{ left: `${l.pct}%` }}>
+                    {l.label}
+                  </span>
+                ))}
+              </div>
+              <div className="timeline-flight-labels timeline-flight-labels--top">
+                {aboveTimes.map((b, i) => (
+                  <span
+                    key={`dep-${i}`}
+                    className={`t-time${b.isFirst ? " t-time--first" : ""}`}
+                    style={{ left: `${b.pct}%` }}
                   >
-                    <span className="t-filter-label t-filter-label--below">{fmtMs(depKnob.value)}</span>
-                  </div>
-                  <div
-                    className="t-filter-knob"
-                    style={{ left: `${arrPct}%` }}
-                    onPointerDown={(event) => startKnobDrag(event, "arr")}
+                    {b.time}
+                  </span>
+                ))}
+              </div>
+              <div className="timeline-flight-labels timeline-flight-labels--bottom">
+                {belowTimes.map((b, i) => (
+                  <span
+                    key={`arr-${i}`}
+                    className={`t-time${b.isLast ? " t-time--last" : ""}`}
+                    style={{ left: `${b.pct}%` }}
                   >
-                    <span className="t-filter-label t-filter-label--above">{fmtMs(arrKnob.value)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    className={`t-filter-range${depFront ? " t-filter-range--front" : ""}`}
-                    min={timelineRange.start} max={timelineRange.end} step={KNOB_STEP_MS}
-                    value={depKnob.value}
-                    onChange={e => depKnob.onChange(Math.min(Number(e.target.value), arrKnob.value - KNOB_STEP_MS))}
-                    aria-label="Departure time filter"
+                    {b.time}
+                  </span>
+                ))}
+              </div>
+              <div className="timeline-track">
+                {depKnob && arrKnob && (() => {
+                  const totalMs = timelineRange.end - timelineRange.start
+                  const depPct = Math.max(0, Math.min(100, ((depKnob.value - timelineRange.start) / totalMs) * 100))
+                  const arrPct = Math.max(0, Math.min(100, ((arrKnob.value - timelineRange.start) / totalMs) * 100))
+                  const depFront = depPct >= arrPct - 1
+                  return (
+                    <>
+                      <div className="t-filter-shade t-filter-shade--left" style={{ width: `${depPct}%` }} />
+                      <div className="t-filter-shade t-filter-shade--right" style={{ left: `${arrPct}%` }} />
+                      <div
+                        className="t-filter-knob"
+                        style={{ left: `${depPct}%` }}
+                        onPointerDown={(event) => startKnobDrag(event, "dep")}
+                      >
+                        <span className="t-filter-label t-filter-label--below">{fmtMs(depKnob.value)}</span>
+                      </div>
+                      <div
+                        className="t-filter-knob"
+                        style={{ left: `${arrPct}%` }}
+                        onPointerDown={(event) => startKnobDrag(event, "arr")}
+                      >
+                        <span className="t-filter-label t-filter-label--above">{fmtMs(arrKnob.value)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        className={`t-filter-range${depFront ? " t-filter-range--front" : ""}`}
+                        min={timelineRange.start} max={timelineRange.end} step={KNOB_STEP_MS}
+                        value={depKnob.value}
+                        onChange={e => depKnob.onChange(Math.min(Number(e.target.value), arrKnob.value - KNOB_STEP_MS))}
+                        aria-label="Departure time filter"
+                      />
+                      <input
+                        type="range"
+                        className={`t-filter-range${depFront ? "" : " t-filter-range--front"}`}
+                        min={timelineRange.start} max={timelineRange.end} step={KNOB_STEP_MS}
+                        value={arrKnob.value}
+                        onChange={e => arrKnob.onChange(Math.max(Number(e.target.value), depKnob.value + KNOB_STEP_MS))}
+                        aria-label="Arrival time filter"
+                      />
+                    </>
+                  )
+                })()}
+                {hourMarks.map((m, i) => (
+                  <div
+                    key={`hr-${i}`}
+                    className={
+                      m.isMidnight ? "t-hour-mark t-hour-mark--midnight"
+                      : m.isQuarter ? "t-hour-mark t-hour-mark--quarter"
+                      : "t-hour-mark"
+                    }
+                    style={{ left: `${m.pct}%` }}
                   />
-                  <input
-                    type="range"
-                    className={`t-filter-range${depFront ? "" : " t-filter-range--front"}`}
-                    min={timelineRange.start} max={timelineRange.end} step={KNOB_STEP_MS}
-                    value={arrKnob.value}
-                    onChange={e => arrKnob.onChange(Math.max(Number(e.target.value), depKnob.value + KNOB_STEP_MS))}
-                    aria-label="Arrival time filter"
-                  />
-                </>
-              )
-            })()}
-            {hourMarks.map((m, i) => (
-              <div
-                key={`hr-${i}`}
-                className={
-                  m.isMidnight ? "t-hour-mark t-hour-mark--midnight"
-                  : m.isQuarter ? "t-hour-mark t-hour-mark--quarter"
-                  : "t-hour-mark"
-                }
-                style={{ left: `${m.pct}%` }}
-              />
-            ))}
-            {spanLabels.map((label) => (
-              <span
-                key={label.key}
-                className={`t-span-label t-span-label--${label.kind}${label.showText ? "" : " t-span-label--empty"}`}
-                style={{ left: `${label.leftPct}%`, width: `${label.widthPct}%` }}
-              >
-                {label.showText ? label.text : ""}
-              </span>
-            ))}
-            {segLabels.map((label) => (
-              <span
-                key={label.key}
-                className={[
-                  "t-seg-iata",
-                  label.side === "left" ? "t-seg-iata--left" : "t-seg-iata--right",
-                  label.intermediate ? "t-seg-iata--intermediate" : "",
-                  label.endpoint ? "t-seg-iata--endpoint" : "",
-                  label.origin ? "t-seg-iata--origin" : "",
-                ].filter(Boolean).join(" ")}
-                style={{ left: `${label.pct}%` }}
-              >
-                {label.code}
-              </span>
-            ))}
-            {segs.map((seg) => {
-              const fl = seg.flight
-              const flightDuration = fmtDur(fl.dur)
-              const showFlightDuration = seg.widthPct >= minSpanLabelWidthPct(flightDuration)
-              return (
-                <div
-                  key={`fl-${seg.index}`}
-                  className="t-seg"
-                  style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, background: airlineColor(fl.airline) }}
-                  title={`${fl.from}→${fl.to}  ${fl.dep}–${fl.arr}  ${fmtDur(fl.dur)}`}
-                >
-                  {showFlightDuration && (
-                    <span className="t-span-label t-span-label--flight t-span-label--in-seg">
-                      {flightDuration}
-                    </span>
-                  )}
-                </div>
-              )
-            })}
+                ))}
+                {spanLabels.map((label) => (
+                  <span
+                    key={label.key}
+                    className={`t-span-label t-span-label--${label.kind}${label.showText ? "" : " t-span-label--empty"}`}
+                    style={{ left: `${label.leftPct}%`, width: `${label.widthPct}%` }}
+                  >
+                    {label.showText ? label.text : ""}
+                  </span>
+                ))}
+                {segLabels.map((label) => (
+                  <span
+                    key={label.key}
+                    className={[
+                      "t-seg-iata",
+                      label.side === "left" ? "t-seg-iata--left" : "t-seg-iata--right",
+                      label.intermediate ? "t-seg-iata--intermediate" : "",
+                      label.endpoint ? "t-seg-iata--endpoint" : "",
+                      label.origin ? "t-seg-iata--origin" : "",
+                    ].filter(Boolean).join(" ")}
+                    style={{ left: `${label.pct}%` }}
+                  >
+                    {label.code}
+                  </span>
+                ))}
+                {segs.map((seg) => {
+                  const fl = seg.flight
+                  const flightDuration = fmtDur(fl.dur)
+                  const showFlightDuration = seg.widthPct >= minSpanLabelWidthPct(flightDuration)
+                  return (
+                    <div
+                      key={`fl-${seg.index}`}
+                      className="t-seg"
+                      style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, background: airlineColor(fl.airline) }}
+                      title={`${fl.from}→${fl.to}  ${fl.dep}–${fl.arr}  ${fmtDur(fl.dur)}`}
+                    >
+                      {showFlightDuration && (
+                        <span className="t-span-label t-span-label--flight t-span-label--in-seg">
+                          {flightDuration}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {showLegs && (
-        <>
+      <div className="timeline-actions">
+        <button
+          type="button"
+          className={`timeline-zoom-toggle${mobileZoomed ? " timeline-zoom-toggle--active" : ""}`}
+          aria-pressed={mobileZoomed}
+          aria-label={mobileZoomed ? "Fit timeline to screen" : "Zoom timeline"}
+          title={mobileZoomed ? "Fit timeline to screen" : "Zoom timeline"}
+          onClick={() => setMobileZoomed((value) => !value)}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true" className="timeline-zoom-icon">
+            <path d="M6 2H2v4M10 2h4v4M14 10v4h-4M2 10v4h4" />
+          </svg>
+        </button>
+        {showLegs && (
           <button
             type="button"
             className="legs-toggle"
@@ -382,28 +399,29 @@ export function TimelineBar({
           >
             {legsExpanded ? "Hide leg details" : "Show leg details"}
           </button>
-          {legsExpanded && (
-            <div className="leg-list">
-              {flights.map((fl, i) => (
-                <div key={`leg-wrap-${i}`}>
-                  <div className="leg-item">
-                    <span className="leg-color-dot" style={{ background: airlineColor(fl.airline) }} />
-                    <span className="leg-route">{fl.from} → {fl.to}</span>
-                    <span className="leg-time">{fl.dep} – {fl.arr}</span>
-                    <span className="leg-airline">{fl.airline} · {fl.fn}</span>
-                    <span className="leg-duration">{fmtDur(fl.dur)}</span>
-                  </div>
-                  {fl.conn != null && fl.conn > 0 && i < flights.length - 1 && (
-                    <div className="layover-row">
-                      <span className="layover-dot" />
-                      Layover at {fl.to} · {fmtDur(fl.conn)}
-                    </div>
-                  )}
+        )}
+      </div>
+
+      {showLegs && legsExpanded && (
+        <div className="leg-list">
+          {flights.map((fl, i) => (
+            <div key={`leg-wrap-${i}`}>
+              <div className="leg-item">
+                <span className="leg-color-dot" style={{ background: airlineColor(fl.airline) }} />
+                <span className="leg-route">{fl.from} → {fl.to}</span>
+                <span className="leg-time">{fl.dep} – {fl.arr}</span>
+                <span className="leg-airline">{fl.airline} · {fl.fn}</span>
+                <span className="leg-duration">{fmtDur(fl.dur)}</span>
+              </div>
+              {fl.conn != null && fl.conn > 0 && i < flights.length - 1 && (
+                <div className="layover-row">
+                  <span className="layover-dot" />
+                  Layover at {fl.to} · {fmtDur(fl.conn)}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
     </div>
   )
