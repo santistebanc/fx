@@ -571,9 +571,14 @@ body {
 }
 
 .arrow-btn-icon {
-  font-size: 1rem;
-  line-height: 1;
-  font-weight: 900;
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .arrow-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--control-raised-hover); }
@@ -907,19 +912,20 @@ body {
 
   .arrow-btn {
     min-width: 0;
-    min-height: 2.2rem;
-    padding: 0.46rem 0.62rem;
-    gap: 0.24rem;
+    min-height: 2rem;
+    padding: 0.34rem 0.48rem;
+    gap: 0.18rem;
     font-size: 0.82rem;
   }
 
   .arrow-btn-icon {
-    font-size: 0.98rem;
+    width: 1.12rem;
+    height: 1.12rem;
   }
 
   .cutoff-toggle {
-    min-height: 2.2rem;
-    padding: 0.42rem 0.78rem;
+    min-height: 2rem;
+    padding: 0.3rem 0.58rem;
     font-size: 0.76rem;
   }
 
@@ -941,8 +947,8 @@ body {
   }
 
   .book-btn {
-    min-height: 2.2rem;
-    padding: 0.44rem 0.82rem;
+    min-height: 2rem;
+    padding: 0.32rem 0.62rem;
     font-size: 0.84rem;
   }
 

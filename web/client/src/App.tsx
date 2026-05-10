@@ -530,7 +530,11 @@ function SearchPage() {
                     aria-label="First trip"
                     onClick={() => setIdx(0)}
                   >
-                    <span className="arrow-btn-icon" aria-hidden="true">⇤</span>
+                    <svg className="arrow-btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M9 6 3 12l6 6" />
+                      <path d="M21 5v14" />
+                      <path d="M4 12h14" />
+                    </svg>
                   </button>
                   <button
                     type="button"
@@ -539,7 +543,10 @@ function SearchPage() {
                     aria-label="Previous trip"
                     onClick={() => navigateTrip(-1)}
                   >
-                    <span className="arrow-btn-icon" aria-hidden="true">←</span>
+                    <svg className="arrow-btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M11 6 5 12l6 6" />
+                      <path d="M6 12h13" />
+                    </svg>
                     <span className="arrow-btn-label">Prev</span>
                   </button>
                   <button
@@ -550,7 +557,10 @@ function SearchPage() {
                     onClick={() => navigateTrip(1)}
                   >
                     <span className="arrow-btn-label">Next</span>
-                    <span className="arrow-btn-icon" aria-hidden="true">→</span>
+                    <svg className="arrow-btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m13 6 6 6-6 6" />
+                      <path d="M5 12h13" />
+                    </svg>
                   </button>
                 </div>
                 <span className="trip-counter">
