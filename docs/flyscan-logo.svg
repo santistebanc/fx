@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 64" role="img" aria-label="flyscan">
   <title>flyscan</title>
-  <rect width="280" height="64" rx="10" fill="#353945"/>
+  <rect width="280" height="64" rx="10" fill="oklch(0.27 0.024 258)"/>
   <text
     x="140"
     y="32"
@@ -11,6 +11,6 @@
     font-weight="600"
     letter-spacing="-0.03em"
   >
-    <tspan fill="#ebeae8">fly</tspan><tspan fill="#ea846c">scan</tspan>
+    <tspan fill="oklch(0.92 0.014 85)">fly</tspan><tspan fill="oklch(0.72 0.18 35)">scan</tspan>
   </text>
 </svg>
