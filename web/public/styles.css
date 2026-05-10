@@ -345,7 +345,7 @@ body {
 
 .trip-swipe-indicator {
   position: absolute;
-  top: 50%;
+  top: 44%;
   display: inline-flex;
   align-items: center;
   gap: 0.95rem;
