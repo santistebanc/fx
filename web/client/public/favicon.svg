@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="6" fill="oklch(0.27 0.024 258)"/>
-  <text x="16" y="22" text-anchor="middle"
-        font-family="Georgia, serif" font-size="18" font-weight="600"
+  <text x="16" y="24" text-anchor="middle"
+        font-family="Georgia, serif" font-size="24" font-weight="600"
         letter-spacing="-1">
     <tspan fill="oklch(0.92 0.014 85)">f</tspan><tspan fill="oklch(0.72 0.18 35)">s</tspan>
   </text>
