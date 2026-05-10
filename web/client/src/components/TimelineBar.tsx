@@ -1,6 +1,15 @@
 import { useState } from "react"
 import type { UiFlight } from "../lib/transformApiResponse"
 
+const KNOB_STEP_MS = 5 * 60 * 1000 // 5 min
+
+function fmtMs(ms: number): string {
+  const d = new Date(ms)
+  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`
+}
+
+type KnobFilter = { value: number; onChange: (v: number) => void }
+
 const SEG_COLORS = ["var(--seg0)", "var(--seg1)", "var(--seg2)", "var(--seg3)"]
 
 function fmtDur(minutes: number): string {
@@ -10,6 +19,7 @@ function fmtDur(minutes: number): string {
 }
 
 type Seg = { type: "flight"; index: number; leftPct: number; widthPct: number; flight: UiFlight }
+type SegLabel = { key: string; pct: number; code: string; side: "left" | "right"; intermediate: boolean; endpoint: boolean; origin: boolean }
 
 type TimelineRange = { start: number; end: number }
 
@@ -51,10 +61,14 @@ export function TimelineBar({
   flights,
   showLegs = true,
   range,
+  depKnob,
+  arrKnob,
 }: {
   flights: UiFlight[]
   showLegs?: boolean
   range?: TimelineRange
+  depKnob?: KnobFilter
+  arrKnob?: KnobFilter
 }) {
   const fallbackRange = flights.length > 0
     ? { start: flights[0].depAt, end: flights[flights.length - 1].arrAt }
@@ -83,7 +97,12 @@ export function TimelineBar({
     const MS_PER_HOUR = 3_600_000
     const MS_PER_6H   = 6 * MS_PER_HOUR
     const totalMs = timelineRange.end - timelineRange.start
-    const busyPcts = boundaries.map(b => b.pct)
+    const knobPcts = depKnob && arrKnob ? [
+      Math.max(0, Math.min(100, ((depKnob.value - timelineRange.start) / totalMs) * 100)),
+      Math.max(0, Math.min(100, ((arrKnob.value - timelineRange.start) / totalMs) * 100)),
+    ] : []
+    const [depKnobPct, arrKnobPct] = knobPcts
+    const busyPcts = [...boundaries.map(b => b.pct), ...knobPcts]
     const THRESHOLD = 4 // pct — suppress label if a flight time is within this distance
 
     const seen = new Set<number>()
@@ -97,15 +116,46 @@ export function TimelineBar({
         pct: ((ts - timelineRange.start) / totalMs) * 100,
         label: `${String(new Date(ts).getUTCHours()).padStart(2, "0")}:00`,
       }))
-      .filter(({ pct }) =>
+      .filter(({ pct }) => {
+        const inLeftEdgeBand = depKnobPct != null && pct <= depKnobPct
+        const inRightEdgeBand = arrKnobPct != null && pct >= arrKnobPct
+        if (inLeftEdgeBand || inRightEdgeBand) return false
+
+        return (
         busyPcts.every(bp => Math.abs(bp - pct) >= THRESHOLD) &&
         flights.every(fl => {
           const flDepPct = ((fl.depAt - timelineRange.start) / totalMs) * 100
           const flArrPct = ((fl.arrAt - timelineRange.start) / totalMs) * 100
           return pct <= flDepPct || pct >= flArrPct
         })
-      )
+        )
+      })
   })()
+
+  const segLabels: SegLabel[] = segs.flatMap((seg) => {
+    const isFirstFlight = seg.index === 0
+    const isIntermediate = seg.index < flights.length - 1
+    return [
+      ...(isFirstFlight ? [{
+        key: `iata-left-${seg.index}`,
+        pct: seg.leftPct,
+        code: seg.flight.from,
+        side: "left" as const,
+        intermediate: false,
+        endpoint: false,
+        origin: true,
+      }] : []),
+      {
+        key: `iata-right-${seg.index}`,
+        pct: seg.leftPct + seg.widthPct,
+        code: seg.flight.to,
+        side: "right" as const,
+        intermediate: isIntermediate,
+        endpoint: !isIntermediate,
+        origin: false,
+      },
+    ]
+  })
 
   const aboveTimes = boundaries.filter(b => b.which === "dep")
   const belowTimes = boundaries.filter(b => b.which === "arr")
@@ -127,6 +177,40 @@ export function TimelineBar({
 
         <div className="timeline-track-wrap">
           <div className="timeline-track">
+            {depKnob && arrKnob && (() => {
+              const totalMs = timelineRange.end - timelineRange.start
+              const depPct = Math.max(0, Math.min(100, ((depKnob.value - timelineRange.start) / totalMs) * 100))
+              const arrPct = Math.max(0, Math.min(100, ((arrKnob.value - timelineRange.start) / totalMs) * 100))
+              const depFront = depPct >= arrPct - 1
+              return (
+                <>
+                  <div className="t-filter-shade t-filter-shade--left" style={{ width: `${depPct}%` }} />
+                  <div className="t-filter-shade t-filter-shade--right" style={{ left: `${arrPct}%` }} />
+                  <div className="t-filter-knob" style={{ left: `${depPct}%` }}>
+                    <span className="t-filter-label t-filter-label--below">{fmtMs(depKnob.value)}</span>
+                  </div>
+                  <div className="t-filter-knob" style={{ left: `${arrPct}%` }}>
+                    <span className="t-filter-label t-filter-label--above">{fmtMs(arrKnob.value)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    className={`t-filter-range${depFront ? " t-filter-range--front" : ""}`}
+                    min={timelineRange.start} max={timelineRange.end} step={KNOB_STEP_MS}
+                    value={depKnob.value}
+                    onChange={e => depKnob.onChange(Math.min(Number(e.target.value), arrKnob.value - KNOB_STEP_MS))}
+                    aria-label="Departure time filter"
+                  />
+                  <input
+                    type="range"
+                    className={`t-filter-range${depFront ? "" : " t-filter-range--front"}`}
+                    min={timelineRange.start} max={timelineRange.end} step={KNOB_STEP_MS}
+                    value={arrKnob.value}
+                    onChange={e => arrKnob.onChange(Math.max(Number(e.target.value), depKnob.value + KNOB_STEP_MS))}
+                    aria-label="Arrival time filter"
+                  />
+                </>
+              )
+            })()}
             {hourMarks.map((m, i) => (
               <div
                 key={`hr-${i}`}
@@ -143,10 +227,23 @@ export function TimelineBar({
                 {l.label}
               </span>
             ))}
+            {segLabels.map((label) => (
+              <span
+                key={label.key}
+                className={[
+                  "t-seg-iata",
+                  label.side === "left" ? "t-seg-iata--left" : "t-seg-iata--right",
+                  label.intermediate ? "t-seg-iata--intermediate" : "",
+                  label.endpoint ? "t-seg-iata--endpoint" : "",
+                  label.origin ? "t-seg-iata--origin" : "",
+                ].filter(Boolean).join(" ")}
+                style={{ left: `${label.pct}%` }}
+              >
+                {label.code}
+              </span>
+            ))}
             {segs.map((seg) => {
               const fl = seg.flight
-              const isFirstFlight = seg.index === 0
-              const rightIsIntermediate = seg.index < flights.length - 1
               return (
                 <div
                   key={`fl-${seg.index}`}
@@ -154,14 +251,6 @@ export function TimelineBar({
                   style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%` }}
                   title={`${fl.from}→${fl.to}  ${fl.dep}–${fl.arr}  ${fmtDur(fl.dur)}`}
                 >
-                  {isFirstFlight && (
-                    <span className="t-seg-iata t-seg-iata--left t-seg-iata--origin">{fl.from}</span>
-                  )}
-                  <span
-                    className={`t-seg-iata t-seg-iata--right${rightIsIntermediate ? " t-seg-iata--intermediate" : " t-seg-iata--endpoint"}`}
-                  >
-                    {fl.to}
-                  </span>
                 </div>
               )
             })}

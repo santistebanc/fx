@@ -57,13 +57,31 @@ function fmtDur(minutes: number): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`
 }
 
-function filterTrips(trips: UiTrip[], filters: Filters): UiTrip[] {
-  return trips.filter(t =>
-    t.price <= filters.price &&
-    t.stats.duration <= filters.duration &&
-    t.stats.stops <= filters.stops &&
-    t.stats.layover <= filters.layover,
-  )
+type TimeFilters = {
+  outDepAfter: number | null
+  outArrBefore: number | null
+  inDepAfter: number | null
+  inArrBefore: number | null
+}
+
+function filterTrips(trips: UiTrip[], filters: Filters, time?: TimeFilters): UiTrip[] {
+  return trips.filter(t => {
+    if (t.price > filters.price) return false
+    if (t.stats.duration > filters.duration) return false
+    if (t.stats.stops > filters.stops) return false
+    if (t.stats.layover > filters.layover) return false
+    if (time) {
+      const outFlights = t.outbound.flights
+      if (time.outDepAfter != null && outFlights[0] && outFlights[0].depAt < time.outDepAfter) return false
+      if (time.outArrBefore != null && outFlights.length > 0 && outFlights[outFlights.length - 1]!.arrAt > time.outArrBefore) return false
+      if (t.inbound) {
+        const inFlights = t.inbound.flights
+        if (time.inDepAfter != null && inFlights[0] && inFlights[0].depAt < time.inDepAfter) return false
+        if (time.inArrBefore != null && inFlights.length > 0 && inFlights[inFlights.length - 1]!.arrAt > time.inArrBefore) return false
+      }
+    }
+    return true
+  })
 }
 
 function getTimelineRange(
@@ -157,6 +175,10 @@ function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [allTrips, setAllTrips] = useState<UiTrip[]>([])
   const [filters, setFiltersState] = useState<Filters>({ price: 9999999, duration: 9999, stops: 99, layover: 9999 })
+  const [outDepFilter, setOutDepFilter] = useState<number | null>(null)
+  const [outArrFilter, setOutArrFilter] = useState<number | null>(null)
+  const [inDepFilter, setInDepFilter] = useState<number | null>(null)
+  const [inArrFilter, setInArrFilter] = useState<number | null>(null)
   const [idx, setIdx] = useState(0)
   const [status, setStatus] = useState<Status>("idle")
   const [errorMsg, setErrorMsg] = useState("")
@@ -176,6 +198,10 @@ function SearchPage() {
     lay:   searchParams.get("lay"),
     tid:   searchParams.get("tid"),
     full:  searchParams.get("full"),
+    odep:  searchParams.get("odep"),
+    oarr:  searchParams.get("oarr"),
+    idep:  searchParams.get("idep"),
+    iarr:  searchParams.get("iarr"),
   })
   urlOverridesRef.current = {
     price: searchParams.get("price"),
@@ -184,6 +210,10 @@ function SearchPage() {
     lay:   searchParams.get("lay"),
     tid:   searchParams.get("tid"),
     full:  searchParams.get("full"),
+    odep:  searchParams.get("odep"),
+    oarr:  searchParams.get("oarr"),
+    idep:  searchParams.get("idep"),
+    iarr:  searchParams.get("iarr"),
   }
 
   // True on first load so URL filter/idx overrides are applied once
@@ -194,7 +224,8 @@ function SearchPage() {
   const setFilter = (key: keyof Filters, value: number) =>
     setFiltersState(f => ({ ...f, [key]: value }))
 
-  const visible      = filterTrips(allTrips, filters)
+  const timeFilters: TimeFilters = { outDepAfter: outDepFilter, outArrBefore: outArrFilter, inDepAfter: inDepFilter, inArrBefore: inArrFilter }
+  const visible      = filterTrips(allTrips, filters, timeFilters)
   const noMatch      = allTrips.length > 0 && visible.length === 0
   const clampedIdx   = visible.length > 0 ? Math.min(idx, visible.length - 1) : 0
   const trip         = visible[clampedIdx] ?? allTrips[0] ?? null
@@ -241,6 +272,10 @@ function SearchPage() {
     let initialFilters = co
     let initialIdx = 0
     let initialCutoffActive = true
+    let initialOutDep: number | null = null
+    let initialOutArr: number | null = null
+    let initialInDep: number | null = null
+    let initialInArr: number | null = null
 
     // Apply URL filter/index overrides on first load only
     if (isFirstLoad.current) {
@@ -259,6 +294,10 @@ function SearchPage() {
         const tidIdx = trips.findIndex(t => t.id === u.tid)
         if (tidIdx >= 0) initialIdx = tidIdx
       }
+      if (u.odep != null) initialOutDep = Number(u.odep)
+      if (u.oarr != null) initialOutArr = Number(u.oarr)
+      if (u.idep != null) initialInDep  = Number(u.idep)
+      if (u.iarr != null) initialInArr  = Number(u.iarr)
       isFirstLoad.current = false
     }
 
@@ -266,6 +305,10 @@ function SearchPage() {
     setFiltersState(initialFilters)
     setCutoffActive(initialCutoffActive)
     setIdx(initialIdx)
+    setOutDepFilter(initialOutDep)
+    setOutArrFilter(initialOutArr)
+    setInDepFilter(initialInDep)
+    setInArrFilter(initialInArr)
     setStatus("idle")
   }
 
@@ -371,7 +414,7 @@ function SearchPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Sync filters, cutoff toggle, and trip index to URL whenever they change (results visible)
+  // Sync filters, cutoff toggle, trip index, and timeline knobs to URL whenever they change
   useEffect(() => {
     if (status !== "idle" || allTrips.length === 0) return
     setSearchParams(prev => {
@@ -385,11 +428,15 @@ function SearchPage() {
       const currentTripId = visible[clampedIdx]?.id
       if (currentTripId) next.set("tid", currentTripId)
       else next.delete("tid")
+      if (outDepFilter != null) next.set("odep", String(outDepFilter)); else next.delete("odep")
+      if (outArrFilter != null) next.set("oarr", String(outArrFilter)); else next.delete("oarr")
+      if (inDepFilter  != null) next.set("idep", String(inDepFilter));  else next.delete("idep")
+      if (inArrFilter  != null) next.set("iarr", String(inArrFilter));  else next.delete("iarr")
       return next
     }, { replace: true })
   // clampedIdx is derived from idx+visible, include both
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, cutoffActive, clampedIdx, status, allTrips.length])
+  }, [filters, cutoffActive, clampedIdx, status, allTrips.length, outDepFilter, outArrFilter, inDepFilter, inArrFilter])
 
   // Expose loadDemo on window for devtools
   useEffect(() => {
@@ -586,7 +633,13 @@ function SearchPage() {
                         <span>Layover <span key={noMatch ? "—l" : trip.outbound.layover} className="itin-stat-val anim-in">{noMatch ? "—" : fmtDur(trip.outbound.layover)}</span></span>
                       </div>
                     </div>
-                    <TimelineBar key="outbound" flights={noMatch ? [] : trip.outbound.flights} range={outboundRange} />
+                    <TimelineBar
+                      key="outbound"
+                      flights={noMatch ? [] : trip.outbound.flights}
+                      range={outboundRange}
+                      depKnob={outboundRange ? { value: outDepFilter ?? outboundRange.start, onChange: setOutDepFilter } : undefined}
+                      arrKnob={outboundRange ? { value: outArrFilter ?? outboundRange.end,   onChange: setOutArrFilter } : undefined}
+                    />
                   </div>
 
                   {trip.inbound && (
@@ -602,7 +655,13 @@ function SearchPage() {
                           <span>Layover <span key={noMatch ? "—l" : trip.inbound.layover} className="itin-stat-val anim-in">{noMatch ? "—" : fmtDur(trip.inbound.layover)}</span></span>
                         </div>
                       </div>
-                      <TimelineBar key="inbound" flights={noMatch ? [] : trip.inbound.flights} range={inboundRange} />
+                      <TimelineBar
+                        key="inbound"
+                        flights={noMatch ? [] : trip.inbound.flights}
+                        range={inboundRange}
+                        depKnob={inboundRange ? { value: inDepFilter ?? inboundRange.start, onChange: setInDepFilter } : undefined}
+                        arrKnob={inboundRange ? { value: inArrFilter ?? inboundRange.end,   onChange: setInArrFilter } : undefined}
+                      />
                     </div>
                   )}
                 </div>

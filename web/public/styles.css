@@ -480,7 +480,7 @@ body {
   width: 100%;
   height: 100%;
   opacity: 0;
-  cursor: pointer;
+  cursor: ew-resize;
   margin: 0;
 }
 .stat-range::-webkit-slider-thumb { width: 4px; height: 18px; }
@@ -1124,7 +1124,6 @@ body {
 .t-seg-iata {
   position: absolute;
   top: 50%;
-  transform: translateY(-50%);
   font-size: 0.78rem;
   font-weight: 800;
   font-family: ui-monospace, monospace;
@@ -1133,11 +1132,12 @@ body {
   white-space: nowrap;
   pointer-events: none;
   user-select: none;
-  z-index: 10;
+  z-index: 11;
   line-height: 1;
+  transition: left 0.38s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.t-seg-iata--left  { right: calc(100% + 0.28rem); left: auto; }
-.t-seg-iata--right { left: calc(100% + 0.28rem); right: auto; }
+.t-seg-iata--left  { transform: translate(calc(-100% - 0.28rem), -50%); }
+.t-seg-iata--right { transform: translate(0.28rem, -50%); }
 
 @media (max-width: 640px) {
   .timeline-times-above,
@@ -1163,6 +1163,74 @@ body {
     display: none;
   }
 }
+
+/* ── TIMELINE FILTER KNOBS ── */
+.t-filter-shade {
+  position: absolute;
+  top: 0; bottom: 0;
+  background-color: oklch(0.20 0.01 255 / 0.55);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    oklch(0.35 0.01 255 / 0.85) 0px,
+    oklch(0.35 0.01 255 / 0.85) 1.5px,
+    transparent 1.5px,
+    transparent 10px
+  );
+  pointer-events: none;
+  z-index: 5;
+}
+.t-filter-shade--left { left: 0; }
+.t-filter-shade--right { right: 0; }
+
+.t-filter-knob {
+  position: absolute;
+  top: -4px; bottom: -4px;
+  width: 7px;
+  transform: translateX(-50%);
+  background: oklch(0.30 0 0);
+  border: 1.5px solid oklch(0.55 0 0);
+  box-shadow: none;
+  pointer-events: none;
+  z-index: 8;
+  cursor: ew-resize;
+}
+
+.t-filter-label {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  color: oklch(1 0 0);
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+}
+.t-filter-label--above { bottom: calc(100% + 5px); }
+.t-filter-label--below { top: calc(100% + 5px); }
+
+.t-filter-range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: ew-resize;
+  margin: 0;
+  z-index: 9;
+  pointer-events: none;
+}
+.t-filter-range--front { z-index: 10; }
+.t-filter-range--back  { z-index: 9; }
+.t-filter-range::-webkit-slider-thumb {
+  width: 7px;
+  height: 100%;
+  pointer-events: all;
+}
+.t-filter-range::-moz-range-thumb { pointer-events: all; }
 
 /* ── FLIGHT LEG LIST ── */
 .leg-list { display: flex; flex-direction: column; gap: 0; margin-top: 0.5rem; }
