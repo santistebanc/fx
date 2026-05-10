@@ -290,7 +290,7 @@ function SearchPage() {
   function shouldIgnoreSwipeTarget(target: EventTarget | null): boolean {
     if (!(target instanceof Element)) return false
     if (target.closest(
-      "button, a, input, select, textarea, label, [role='button'], .timeline-actions, .stat-bar-wrap, .stops-filter-bar, .t-filter-knob, .t-filter-range",
+      "button, a, input, select, textarea, label, [role='button'], .stat-bar-wrap, .stops-filter-bar, .t-filter-knob, .t-filter-range",
     )) return true
 
     const timelineShell = target.closest(".timeline-scroll-shell")
