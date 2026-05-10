@@ -1158,6 +1158,7 @@ body {
   top: 0.22rem;
   bottom: 0.22rem;
   min-width: 6px;
+  opacity: 0.68;
   box-shadow: 0 1px 4px var(--shadow-seg), inset 0 1px 0 oklch(1 0 0 / 0.2);
   z-index: 2;
   overflow: visible;
