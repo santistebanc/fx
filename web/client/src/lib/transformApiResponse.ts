@@ -71,7 +71,7 @@ function centsToEuros(cents: number): number {
 
 function fmtDate(iso: string): string {
   const d = new Date(iso + 'T12:00:00Z')
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
 function toUtcMillis(date: string, time: string): number {
@@ -164,10 +164,16 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
       }
       if (uiFlights.length === 0) return null
       const firstF = flightsById.get(legSet[0].flight)
+      const lastF  = flightsById.get(legSet[legSet.length - 1].flight)
       const duration = uiFlights.reduce((acc, fl, i) =>
         acc + fl.dur + (i < uiFlights.length - 1 && fl.conn ? fl.conn : 0), 0)
       const layover = uiFlights.slice(0, -1).reduce((acc, fl) => acc + (fl.conn ?? 0), 0)
-      return { date: firstF ? fmtDate(firstF.departure_date) : '', duration, layover, flights: uiFlights }
+      const depDate = firstF?.departure_date ?? ""
+      const arrDate = lastF?.arrival_date && lastF.arrival_date !== depDate ? lastF.arrival_date : null
+      const date = depDate
+        ? arrDate ? `${fmtDate(depDate)} – ${fmtDate(arrDate)}` : fmtDate(depDate)
+        : ""
+      return { date, duration, layover, flights: uiFlights }
     }
 
     const outbound = buildItin(outLegs)

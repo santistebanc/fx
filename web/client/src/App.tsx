@@ -75,7 +75,13 @@ function getTimelineRange(
     .filter((flights): flights is UiTrip["outbound"]["flights"] => Boolean(flights && flights.length > 0))
     .map((flights) => ({ start: flights[0]!.depAt, end: flights[flights.length - 1]!.arrAt }))
   if (bounds.length === 0) return undefined
-  return { start: Math.min(...bounds.map(b => b.start)), end: Math.max(...bounds.map(b => b.end)) }
+  const MS_PER_HOUR = 3_600_000
+  const rawStart = Math.min(...bounds.map(b => b.start))
+  const rawEnd   = Math.max(...bounds.map(b => b.end))
+  return {
+    start: Math.floor(rawStart / MS_PER_HOUR) * MS_PER_HOUR,
+    end:   Math.ceil(rawEnd   / MS_PER_HOUR) * MS_PER_HOUR,
+  }
 }
 
 function computeCutoff(trips: UiTrip[]): Filters {

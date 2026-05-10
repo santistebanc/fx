@@ -1060,6 +1060,42 @@ body {
   overflow: visible;
 }
 
+.t-hour-mark {
+  position: absolute;
+  top: 0;
+  height: 5px;
+  width: 1px;
+  background: color-mix(in oklch, var(--ink) 14%, transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.t-hour-mark--quarter {
+  height: 8px;
+  background: color-mix(in oklch, var(--ink) 28%, transparent);
+}
+
+.t-hour-label {
+  position: absolute;
+  bottom: 2px;
+  transform: translateX(-50%);
+  font-size: 0.58rem;
+  font-family: ui-monospace, monospace;
+  color: color-mix(in oklch, var(--ink) 35%, transparent);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  z-index: 4;
+  line-height: 1;
+}
+
+.t-hour-mark--midnight {
+  top: 0; bottom: 0; height: auto;
+  width: 2px;
+  background: none;
+  border-left: 2px dashed color-mix(in oklch, var(--ink) 40%, transparent);
+}
+
 .t-tick {
   position: absolute;
   top: 0; bottom: 0;
@@ -1081,10 +1117,10 @@ body {
   transition: left 0.38s cubic-bezier(0.4, 0, 0.2, 1),
               width 0.38s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.t-seg--0 { background: var(--seg0); }
-.t-seg--1 { background: var(--seg1); }
-.t-seg--2 { background: var(--seg2); }
-.t-seg--3 { background: var(--seg3); }
+.t-seg--0 { background: color-mix(in oklch, var(--seg0) 70%, transparent); }
+.t-seg--1 { background: color-mix(in oklch, var(--seg1) 70%, transparent); }
+.t-seg--2 { background: color-mix(in oklch, var(--seg2) 70%, transparent); }
+.t-seg--3 { background: color-mix(in oklch, var(--seg3) 70%, transparent); }
 .t-seg-iata {
   position: absolute;
   top: 50%;
