@@ -14,7 +14,7 @@
     "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
-      "@fx/*": ["../../*"]
+      "@flyscan/*": ["../../*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]

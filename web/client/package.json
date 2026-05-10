@@ -1,5 +1,5 @@
 {
-  "name": "fx-web-client",
+  "name": "flyscan-web-client",
   "private": true,
   "type": "module",
   "scripts": {

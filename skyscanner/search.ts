@@ -14,13 +14,13 @@ export class PollMaxRetriesError extends Data.TaggedError("PollMaxRetriesError")
 }> { }
 
 const log = (phase: string, detail?: Record<string, unknown>) => {
-  if (detail === undefined) console.log(`[fx scrape skyscanner] ${phase}`)
-  else console.log(`[fx scrape skyscanner] ${phase}`, detail)
+  if (detail === undefined) console.log(`[flyscan scrape skyscanner] ${phase}`)
+  else console.log(`[flyscan scrape skyscanner] ${phase}`, detail)
 }
 
-/** Poll until portal reports finished; override with FX_POLL_MAX_RETRIES (default 5 attempts, 1s apart). */
+/** Poll until portal reports finished; override with FLYSCAN_POLL_MAX_RETRIES (default 5 attempts, 1s apart). */
 const defaultPollMaxRetries = (): number => {
-  const n = Number(process.env.FX_POLL_MAX_RETRIES)
+  const n = Number(process.env.FLYSCAN_POLL_MAX_RETRIES)
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 5
 }
 

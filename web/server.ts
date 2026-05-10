@@ -20,8 +20,8 @@ import { searchWithReal as kiwiReal } from "../kiwi/searchWithConfig"
 const dir = import.meta.dir
 
 const apiLog = (msg: string, detail?: Record<string, unknown>) => {
-  if (detail === undefined) console.log(`[fx api] ${msg}`)
-  else console.log(`[fx api] ${msg}`, detail)
+  if (detail === undefined) console.log(`[flyscan api] ${msg}`)
+  else console.log(`[flyscan api] ${msg}`, detail)
 }
 
 /** Comma-separated list, e.g. `https://youruser.github.io` for GitHub Pages. Required for browser calls when the UI is on another origin. */
@@ -434,5 +434,5 @@ console.log(`Flight UI  http://localhost:${port}`)
 console.log(`API        POST http://localhost:${port}/api/search  (live)`)
 console.log(`           GET  http://localhost:${port}/api/fixture-demo  (snapshot from fixture.ts)`)
 if (!existsSync(distIndex)) {
-  console.warn(`[fx web] React UI missing (${distIndex}). Build with: bun run web:build`)
+  console.warn(`[flyscan web] React UI missing (${distIndex}). Build with: bun run web:build`)
 }

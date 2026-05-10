@@ -13,8 +13,8 @@ export class PollMaxRetriesError extends Data.TaggedError("PollMaxRetriesError")
 }> { }
 
 const log = (phase: string, detail?: Record<string, unknown>) => {
-  if (detail === undefined) console.log(`[fx scrape kiwi] ${phase}`)
-  else console.log(`[fx scrape kiwi] ${phase}`, detail)
+  if (detail === undefined) console.log(`[flyscan scrape kiwi] ${phase}`)
+  else console.log(`[flyscan scrape kiwi] ${phase}`, detail)
 }
 
 export const search = (

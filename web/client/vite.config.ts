@@ -15,7 +15,7 @@ export default defineConfig({
   publicDir: false,
   resolve: {
     alias: {
-      "@fx": path.resolve(__dirname, "../.."),
+      "@flyscan": path.resolve(__dirname, "../.."),
     },
   },
   server: {

@@ -288,7 +288,7 @@ function SearchPage() {
         // Backend may be unavailable; fall through to local fixture.
       }
       if (!data) {
-        const local = await import("@fx/fixture")
+        const local = await import("@flyscan/fixture")
         data = local.fixture as ApiPayload
         console.log("[flyscan] local fixture fallback", data)
       }

@@ -37,7 +37,7 @@ Open the URL printed in the terminal (default `http://localhost:3010`).
 ## Notes
 
 - Prices are shown in **EUR**, rounded to whole units in the UI.
-- Skyscanner polling can be tuned with env (e.g. `FX_POLL_MAX_RETRIES`); see `skyscanner/search.ts`.
+- Skyscanner polling can be tuned with env (e.g. `FLYSCAN_POLL_MAX_RETRIES`); see `skyscanner/search.ts`.
 
 ## Project layout
 
