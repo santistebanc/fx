@@ -287,9 +287,14 @@ function SearchPage() {
 
   function shouldIgnoreSwipeTarget(target: EventTarget | null): boolean {
     if (!(target instanceof Element)) return false
-    return Boolean(target.closest(
-      "button, a, input, select, textarea, label, [role='button'], .timeline-scroll-shell, .timeline-actions, .stat-bar-wrap, .stops-filter-bar",
-    ))
+    if (target.closest(
+      "button, a, input, select, textarea, label, [role='button'], .timeline-actions, .stat-bar-wrap, .stops-filter-bar, .t-filter-knob, .t-filter-range",
+    )) return true
+
+    const timelineShell = target.closest(".timeline-scroll-shell")
+    if (timelineShell?.closest(".timeline-wrap--zoomed")) return true
+
+    return false
   }
 
   function handleTripTouchStart(event: ReactTouchEvent<HTMLDivElement>) {
