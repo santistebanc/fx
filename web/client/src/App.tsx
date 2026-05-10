@@ -64,6 +64,8 @@ type TimeFilters = {
   inArrBefore: number | null
 }
 
+type AirlineColorMap = Record<string, string>
+
 function filterTrips(trips: UiTrip[], filters: Filters, time?: TimeFilters): UiTrip[] {
   return trips.filter(t => {
     if (t.price > filters.price) return false
@@ -100,6 +102,22 @@ function getTimelineRange(
     start: Math.floor(rawStart / MS_PER_HOUR) * MS_PER_HOUR,
     end:   Math.ceil(rawEnd   / MS_PER_HOUR) * MS_PER_HOUR,
   }
+}
+
+function buildAirlineColorMap(trips: UiTrip[]): AirlineColorMap {
+  const airlines = [...new Set(
+    trips.flatMap((trip) => [
+      ...trip.outbound.flights.map((flight) => flight.airline),
+      ...(trip.inbound?.flights.map((flight) => flight.airline) ?? []),
+    ]),
+  )].sort((a, b) => a.localeCompare(b))
+
+  const map: AirlineColorMap = {}
+  airlines.forEach((airline, index) => {
+    const hue = (index * 137.508) % 360
+    map[airline] = `oklch(0.72 0.15 ${hue})`
+  })
+  return map
 }
 
 function computeCutoff(trips: UiTrip[]): Filters {
@@ -229,6 +247,7 @@ function SearchPage() {
   const noMatch      = allTrips.length > 0 && visible.length === 0
   const clampedIdx   = visible.length > 0 ? Math.min(idx, visible.length - 1) : 0
   const trip         = visible[clampedIdx] ?? allTrips[0] ?? null
+  const airlineColors = buildAirlineColorMap(allTrips)
   // Timeline axis spans the "knobs at max" set so the range stays stable while dragging
   const timelineTrips = cutoffActive && cutoff ? filterTrips(allTrips, cutoff) : allTrips
   const outboundRange = getTimelineRange(timelineTrips, t => t.outbound.flights)
@@ -508,6 +527,15 @@ function SearchPage() {
                     type="button"
                     className="arrow-btn"
                     disabled={clampedIdx <= 0}
+                    aria-label="First trip"
+                    onClick={() => setIdx(0)}
+                  >
+                    <span className="arrow-btn-icon" aria-hidden="true">⇤</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="arrow-btn"
+                    disabled={clampedIdx <= 0}
                     aria-label="Previous trip"
                     onClick={() => navigateTrip(-1)}
                   >
@@ -531,7 +559,12 @@ function SearchPage() {
                 {cutoff && (
                   <div className="cutoff-group">
                     <button type="button" className="cutoff-toggle" onClick={toggleCutoff}>
-                      {cutoffActive ? "use all data" : "use best data"}
+                      <span className="cutoff-toggle-label cutoff-toggle-label--full">
+                        {cutoffActive ? "use all data" : "use best data"}
+                      </span>
+                      <span className="cutoff-toggle-label cutoff-toggle-label--compact">
+                        {cutoffActive ? "show all" : "show best"}
+                      </span>
                     </button>
                   </div>
                 )}
@@ -637,6 +670,7 @@ function SearchPage() {
                       key="outbound"
                       flights={noMatch ? [] : trip.outbound.flights}
                       range={outboundRange}
+                      airlineColors={airlineColors}
                       depKnob={outboundRange ? { value: outDepFilter ?? outboundRange.start, onChange: setOutDepFilter } : undefined}
                       arrKnob={outboundRange ? { value: outArrFilter ?? outboundRange.end,   onChange: setOutArrFilter } : undefined}
                     />
@@ -659,6 +693,7 @@ function SearchPage() {
                         key="inbound"
                         flights={noMatch ? [] : trip.inbound.flights}
                         range={inboundRange}
+                        airlineColors={airlineColors}
                         depKnob={inboundRange ? { value: inDepFilter ?? inboundRange.start, onChange: setInDepFilter } : undefined}
                         arrKnob={inboundRange ? { value: inArrFilter ?? inboundRange.end,   onChange: setInArrFilter } : undefined}
                       />

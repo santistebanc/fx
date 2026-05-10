@@ -11,8 +11,6 @@ function fmtMs(ms: number): string {
 
 type KnobFilter = { value: number; onChange: (v: number) => void }
 
-const SEG_COLORS = ["var(--seg0)", "var(--seg1)", "var(--seg2)", "var(--seg3)"]
-
 function fmtDur(minutes: number): string {
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
@@ -21,6 +19,7 @@ function fmtDur(minutes: number): string {
 
 type Seg = { type: "flight"; index: number; leftPct: number; widthPct: number; flight: UiFlight }
 type SegLabel = { key: string; pct: number; code: string; side: "left" | "right"; intermediate: boolean; endpoint: boolean; origin: boolean }
+type SpanLabel = { key: string; kind: "layover"; leftPct: number; widthPct: number; text: string; showText: boolean }
 
 type TimelineRange = { start: number; end: number }
 
@@ -62,16 +61,22 @@ function snapToStep(value: number, step: number): number {
   return Math.round(value / step) * step
 }
 
+function minSpanLabelWidthPct(text: string): number {
+  return Math.max(8, text.length * 1.35)
+}
+
 export function TimelineBar({
   flights,
   showLegs = true,
   range,
+  airlineColors,
   depKnob,
   arrKnob,
 }: {
   flights: UiFlight[]
   showLegs?: boolean
   range?: TimelineRange
+  airlineColors?: Record<string, string>
   depKnob?: KnobFilter
   arrKnob?: KnobFilter
 }) {
@@ -162,8 +167,27 @@ export function TimelineBar({
     ]
   })
 
+  const spanLabels: SpanLabel[] = flights.flatMap((fl, i) => {
+      if (i >= flights.length - 1) return []
+      const next = flights[i + 1]
+      if (!next) return []
+      const leftPct = ((fl.arrAt - timelineRange.start) / 60000 / totalMin) * 100
+      const widthPct = ((next.depAt - fl.arrAt) / 60000 / totalMin) * 100
+      const text = fmtDur(Math.max(0, Math.round((next.depAt - fl.arrAt) / 60000)))
+      const minWidthPct = minSpanLabelWidthPct(text)
+      return [{
+        key: `layover-dur-${i}`,
+        kind: "layover" as const,
+        leftPct,
+        widthPct,
+        text,
+        showText: widthPct >= minWidthPct,
+      }]
+    })
+
   const aboveTimes = boundaries.filter(b => b.which === "dep")
   const belowTimes = boundaries.filter(b => b.which === "arr")
+  const airlineColor = (airline: string) => airlineColors?.[airline] ?? "var(--seg0)"
 
   const startKnobDrag = (
     event: ReactPointerEvent<HTMLDivElement>,
@@ -217,19 +241,36 @@ export function TimelineBar({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
       <div className="timeline-wrap">
-        <div className="timeline-times-above">
-          {aboveTimes.map((b, i) => (
-            <span
-              key={i}
-              className={`t-time${b.isFirst ? " t-time--first" : ""}`}
-              style={{ left: `${b.pct}%` }}
-            >
-              {b.time}
-            </span>
-          ))}
-        </div>
-
         <div className="timeline-track-wrap">
+          <div className="timeline-hour-labels">
+            {hourLabels.map((l, i) => (
+              <span key={`hlabel-${i}`} className="t-hour-label" style={{ left: `${l.pct}%` }}>
+                {l.label}
+              </span>
+            ))}
+          </div>
+          <div className="timeline-flight-labels timeline-flight-labels--top">
+            {aboveTimes.map((b, i) => (
+              <span
+                key={`dep-${i}`}
+                className={`t-time${b.isFirst ? " t-time--first" : ""}`}
+                style={{ left: `${b.pct}%` }}
+              >
+                {b.time}
+              </span>
+            ))}
+          </div>
+          <div className="timeline-flight-labels timeline-flight-labels--bottom">
+            {belowTimes.map((b, i) => (
+              <span
+                key={`arr-${i}`}
+                className={`t-time${b.isLast ? " t-time--last" : ""}`}
+                style={{ left: `${b.pct}%` }}
+              >
+                {b.time}
+              </span>
+            ))}
+          </div>
           <div className="timeline-track">
             {depKnob && arrKnob && (() => {
               const totalMs = timelineRange.end - timelineRange.start
@@ -284,9 +325,13 @@ export function TimelineBar({
                 style={{ left: `${m.pct}%` }}
               />
             ))}
-            {hourLabels.map((l, i) => (
-              <span key={`hlabel-${i}`} className="t-hour-label" style={{ left: `${l.pct}%` }}>
-                {l.label}
+            {spanLabels.map((label) => (
+              <span
+                key={label.key}
+                className={`t-span-label t-span-label--${label.kind}${label.showText ? "" : " t-span-label--empty"}`}
+                style={{ left: `${label.leftPct}%`, width: `${label.widthPct}%` }}
+              >
+                {label.showText ? label.text : ""}
               </span>
             ))}
             {segLabels.map((label) => (
@@ -306,29 +351,24 @@ export function TimelineBar({
             ))}
             {segs.map((seg) => {
               const fl = seg.flight
+              const flightDuration = fmtDur(fl.dur)
+              const showFlightDuration = seg.widthPct >= minSpanLabelWidthPct(flightDuration)
               return (
                 <div
                   key={`fl-${seg.index}`}
-                  className={`t-seg t-seg--${seg.index % SEG_COLORS.length}`}
-                  style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%` }}
+                  className="t-seg"
+                  style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, background: airlineColor(fl.airline) }}
                   title={`${fl.from}→${fl.to}  ${fl.dep}–${fl.arr}  ${fmtDur(fl.dur)}`}
                 >
+                  {showFlightDuration && (
+                    <span className="t-span-label t-span-label--flight t-span-label--in-seg">
+                      {flightDuration}
+                    </span>
+                  )}
                 </div>
               )
             })}
           </div>
-        </div>
-
-        <div className="timeline-times-below">
-          {belowTimes.map((b, i) => (
-            <span
-              key={i}
-              className={`t-time${b.isLast ? " t-time--last" : ""}`}
-              style={{ left: `${b.pct}%` }}
-            >
-              {b.time}
-            </span>
-          ))}
         </div>
       </div>
 
@@ -347,7 +387,7 @@ export function TimelineBar({
               {flights.map((fl, i) => (
                 <div key={`leg-wrap-${i}`}>
                   <div className="leg-item">
-                    <span className="leg-color-dot" style={{ background: SEG_COLORS[i % SEG_COLORS.length] }} />
+                    <span className="leg-color-dot" style={{ background: airlineColor(fl.airline) }} />
                     <span className="leg-route">{fl.from} → {fl.to}</span>
                     <span className="leg-time">{fl.dep} – {fl.arr}</span>
                     <span className="leg-airline">{fl.airline} · {fl.fn}</span>
