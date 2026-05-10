@@ -569,7 +569,7 @@ function SearchPage() {
             <div
               className={`trip-swipe-indicator trip-swipe-indicator--${swipePreview.direction}`}
               style={{
-                transform: `translateX(calc(-50% + ${Math.max(-72, Math.min(72, swipePreview.dx * 0.32))}px))`,
+                transform: `translateY(-50%) translateX(${Math.max(-96, Math.min(96, swipePreview.dx * 0.32))}px)`,
                 opacity: Math.min(1, Math.abs(swipePreview.dx) / 90),
               }}
             >
