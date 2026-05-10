@@ -338,6 +338,55 @@ body {
   min-width: 0;
 }
 
+.trip-swipe-shell {
+  position: relative;
+  width: 100%;
+}
+
+.trip-swipe-indicator {
+  position: absolute;
+  left: 50%;
+  top: clamp(7rem, 16vw, 9rem);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--line));
+  background: color-mix(in oklch, var(--paper) 86%, var(--surface-raised) 14%);
+  color: var(--ink);
+  box-shadow: 0 12px 32px oklch(0.08 0.01 255 / 0.14);
+  pointer-events: none;
+  z-index: 25;
+  white-space: nowrap;
+  transition: opacity 0.12s;
+}
+
+.trip-swipe-indicator__icon {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.trip-swipe-indicator__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.trip-swipe-indicator--prev {
+  color: color-mix(in oklch, var(--ink) 78%, var(--accent) 22%);
+}
+
+.trip-swipe-indicator--next {
+  color: color-mix(in oklch, var(--ink) 78%, var(--accent-hi) 22%);
+}
+
 /* ── SIDEBAR FILTERS ── */
 .filter-section-title {
   font-size: 0.6rem;

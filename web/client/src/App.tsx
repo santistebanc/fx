@@ -154,6 +154,7 @@ function computeCutoff(trips: UiTrip[]): Filters {
 }
 
 type Status = "idle" | "loading" | "error"
+type SwipePreview = { direction: "prev" | "next"; dx: number }
 
 // ── Root ────────────────────────────────────────────────────────────────────
 
@@ -203,6 +204,7 @@ function SearchPage() {
   const [bookOpen, setBookOpen] = useState(false)
   const [cutoffActive, setCutoffActive] = useState(true)
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null)
+  const [swipePreview, setSwipePreview] = useState<SwipePreview | null>(null)
 
   const urlFrom = searchParams.get("from") ?? ""
   const urlTo   = searchParams.get("to")   ?? ""
@@ -300,14 +302,43 @@ function SearchPage() {
   function handleTripTouchStart(event: ReactTouchEvent<HTMLDivElement>) {
     if (event.touches.length !== 1) {
       swipeStartRef.current = null
+      setSwipePreview(null)
       return
     }
     if (shouldIgnoreSwipeTarget(event.target)) {
       swipeStartRef.current = null
+      setSwipePreview(null)
       return
     }
     const touch = event.touches[0]
     swipeStartRef.current = { x: touch.clientX, y: touch.clientY }
+    setSwipePreview(null)
+  }
+
+  function handleTripTouchMove(event: ReactTouchEvent<HTMLDivElement>) {
+    if (!swipeStartRef.current) return
+
+    const touch = event.touches[0]
+    if (!touch) return
+
+    const dx = touch.clientX - swipeStartRef.current.x
+    const dy = touch.clientY - swipeStartRef.current.y
+
+    if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) {
+      setSwipePreview(null)
+      return
+    }
+
+    if (dx < 0 && clampedIdx < visible.length - 1) {
+      setSwipePreview({ direction: "next", dx })
+      return
+    }
+    if (dx > 0 && clampedIdx > 0) {
+      setSwipePreview({ direction: "prev", dx })
+      return
+    }
+
+    setSwipePreview(null)
   }
 
   function handleTripTouchEnd(event: ReactTouchEvent<HTMLDivElement>) {
@@ -319,12 +350,18 @@ function SearchPage() {
     const dx = touch.clientX - swipeStartRef.current.x
     const dy = touch.clientY - swipeStartRef.current.y
     swipeStartRef.current = null
+    setSwipePreview(null)
 
     if (Math.abs(dx) < 56) return
     if (Math.abs(dx) < Math.abs(dy) * 1.35) return
 
     if (dx < 0 && clampedIdx < visible.length - 1) navigateTrip(1)
     if (dx > 0 && clampedIdx > 0) navigateTrip(-1)
+  }
+
+  function handleTripTouchCancel() {
+    swipeStartRef.current = null
+    setSwipePreview(null)
   }
 
   function loadPayload(payload: ApiPayload) {
@@ -521,7 +558,31 @@ function SearchPage() {
       />
 
       <div className="workspace">
-        <main className="main-col">
+        <main
+          className="main-col trip-swipe-shell"
+          onTouchStart={handleTripTouchStart}
+          onTouchMove={handleTripTouchMove}
+          onTouchEnd={handleTripTouchEnd}
+          onTouchCancel={handleTripTouchCancel}
+        >
+          {swipePreview && (
+            <div
+              className={`trip-swipe-indicator trip-swipe-indicator--${swipePreview.direction}`}
+              style={{
+                transform: `translateX(calc(-50% + ${Math.max(-72, Math.min(72, swipePreview.dx * 0.32))}px))`,
+                opacity: Math.min(1, Math.abs(swipePreview.dx) / 90),
+              }}
+            >
+              <svg className="trip-swipe-indicator__icon" viewBox="0 0 24 24" aria-hidden="true">
+                {swipePreview.direction === "prev"
+                  ? <path d="M11 6 5 12l6 6M6 12h13" />
+                  : <path d="m13 6 6 6-6 6M5 12h13" />}
+              </svg>
+              <span className="trip-swipe-indicator__label">
+                {swipePreview.direction === "prev" ? "Previous trip" : "Next trip"}
+              </span>
+            </div>
+          )}
           {status === "loading" && (
             <div className="empty-state empty-state--fullscreen">
               <div
@@ -628,7 +689,7 @@ function SearchPage() {
               </div>
 
               {trip && (
-                <div onTouchStart={handleTripTouchStart} onTouchEnd={handleTripTouchEnd}>
+                <div>
                   <div className="price-row">
                     <div className="trip-stat-filters">
                       <div className="trip-stat-stack">
