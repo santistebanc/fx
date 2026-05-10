@@ -240,7 +240,7 @@ export function TimelineBar({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 0, width: "100%" }}>
       <div className={`timeline-wrap${mobileZoomed ? " timeline-wrap--zoomed" : ""}`}>
         <div className="timeline-scroll-shell">
           <div className="timeline-scroll-inner">
@@ -378,6 +378,16 @@ export function TimelineBar({
       </div>
 
       <div className="timeline-actions">
+        {showLegs && (
+          <button
+            type="button"
+            className="legs-toggle"
+            onClick={() => setLegsExpanded((v) => !v)}
+            aria-expanded={legsExpanded}
+          >
+            {legsExpanded ? "Hide leg details" : "Show leg details"}
+          </button>
+        )}
         <button
           type="button"
           className={`timeline-zoom-toggle${mobileZoomed ? " timeline-zoom-toggle--active" : ""}`}
@@ -390,16 +400,6 @@ export function TimelineBar({
             <path d="M6 2H2v4M10 2h4v4M14 10v4h-4M2 10v4h4" />
           </svg>
         </button>
-        {showLegs && (
-          <button
-            type="button"
-            className="legs-toggle"
-            onClick={() => setLegsExpanded((v) => !v)}
-            aria-expanded={legsExpanded}
-          >
-            {legsExpanded ? "Hide leg details" : "Show leg details"}
-          </button>
-        )}
       </div>
 
       {showLegs && legsExpanded && (
