@@ -1,5 +1,7 @@
 /**
- * Captures docs/screenshots/app.png using the bundled fixture (?fixture=1).
+ * Captures docs/screenshots/app.png using the bundled fixture.
+ * The app uses client-side routing, so the script navigates to `/`
+ * and then pushes `/search?fixture=1` into history.
  * Viewport: iPad-sized (Playwright device preset, landscape for the wide search bar).
  * Requires: bun run web:build, playwright browsers (bunx playwright install chromium).
  */
@@ -36,11 +38,15 @@ try {
     ...devices["iPad Air landscape"],
   })
   const page = await context.newPage()
-  await page.goto(`http://127.0.0.1:${port}/?fixture=1`, {
+  await page.goto(`http://127.0.0.1:${port}/`, {
     waitUntil: "domcontentloaded",
     timeout: 60_000,
   })
-  await page.getByText("Trip 1 of").waitFor({ state: "visible", timeout: 90_000 })
+  await page.evaluate(() => {
+    history.pushState({}, "", "/search?fixture=1")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  await page.getByText(/Trip \d+ of \d+/).waitFor({ state: "visible", timeout: 90_000 })
   await page.screenshot({ path: outPath, fullPage: true })
   console.log("[captureReadmeScreenshot] wrote", outPath)
 } finally {
