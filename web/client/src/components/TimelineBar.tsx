@@ -1,4 +1,5 @@
 import { useState } from "react"
+import type { PointerEvent as ReactPointerEvent } from "react"
 import type { UiFlight } from "../lib/transformApiResponse"
 
 const KNOB_STEP_MS = 5 * 60 * 1000 // 5 min
@@ -56,6 +57,10 @@ function buildTimelineSegs(flights: UiFlight[], range: TimelineRange): { segs: S
 }
 
 type Boundary = { pct: number; time: string; isFirst: boolean; isLast: boolean; which: "dep" | "arr" }
+
+function snapToStep(value: number, step: number): number {
+  return Math.round(value / step) * step
+}
 
 export function TimelineBar({
   flights,
@@ -160,6 +165,55 @@ export function TimelineBar({
   const aboveTimes = boundaries.filter(b => b.which === "dep")
   const belowTimes = boundaries.filter(b => b.which === "arr")
 
+  const startKnobDrag = (
+    event: ReactPointerEvent<HTMLDivElement>,
+    which: "dep" | "arr",
+  ) => {
+    if (!depKnob || !arrKnob) return
+
+    const track = event.currentTarget.closest(".timeline-track")
+    if (!(track instanceof HTMLElement)) return
+
+    const pointerId = event.pointerId
+    const target = event.currentTarget
+    const totalMs = timelineRange.end - timelineRange.start
+
+    const updateFromClientX = (clientX: number) => {
+      const rect = track.getBoundingClientRect()
+      if (rect.width <= 0) return
+
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+      const rawValue = timelineRange.start + pct * totalMs
+      const nextValue = snapToStep(rawValue, KNOB_STEP_MS)
+
+      if (which === "dep") depKnob.onChange(Math.min(nextValue, arrKnob.value - KNOB_STEP_MS))
+      else arrKnob.onChange(Math.max(nextValue, depKnob.value + KNOB_STEP_MS))
+    }
+
+    const cleanup = () => {
+      window.removeEventListener("pointermove", handleMove)
+      window.removeEventListener("pointerup", handleUp)
+      window.removeEventListener("pointercancel", handleUp)
+      if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId)
+    }
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return
+      updateFromClientX(moveEvent.clientX)
+    }
+
+    const handleUp = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return
+      cleanup()
+    }
+
+    event.preventDefault()
+    target.setPointerCapture(pointerId)
+    window.addEventListener("pointermove", handleMove)
+    window.addEventListener("pointerup", handleUp)
+    window.addEventListener("pointercancel", handleUp)
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
       <div className="timeline-wrap">
@@ -186,10 +240,18 @@ export function TimelineBar({
                 <>
                   <div className="t-filter-shade t-filter-shade--left" style={{ width: `${depPct}%` }} />
                   <div className="t-filter-shade t-filter-shade--right" style={{ left: `${arrPct}%` }} />
-                  <div className="t-filter-knob" style={{ left: `${depPct}%` }}>
+                  <div
+                    className="t-filter-knob"
+                    style={{ left: `${depPct}%` }}
+                    onPointerDown={(event) => startKnobDrag(event, "dep")}
+                  >
                     <span className="t-filter-label t-filter-label--below">{fmtMs(depKnob.value)}</span>
                   </div>
-                  <div className="t-filter-knob" style={{ left: `${arrPct}%` }}>
+                  <div
+                    className="t-filter-knob"
+                    style={{ left: `${arrPct}%` }}
+                    onPointerDown={(event) => startKnobDrag(event, "arr")}
+                  >
                     <span className="t-filter-label t-filter-label--above">{fmtMs(arrKnob.value)}</span>
                   </div>
                   <input

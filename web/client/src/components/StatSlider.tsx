@@ -1,3 +1,5 @@
+import type { PointerEvent as ReactPointerEvent } from "react"
+
 type StatSliderProps = {
   label: string
   value: number
@@ -16,6 +18,47 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
   const clamp = (v: number) => Math.min(Math.max(v, min), max)
   const knobValue = clamp(value)
   const safeStep = step > 0 ? step : 1
+
+  const startKnobDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const track = event.currentTarget.closest(".stat-track")
+    if (!(track instanceof HTMLElement)) return
+
+    const pointerId = event.pointerId
+    const target = event.currentTarget
+
+    const updateFromClientX = (clientX: number) => {
+      const rect = track.getBoundingClientRect()
+      if (rect.width <= 0) return
+
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+      const rawValue = min + pct * range
+      const nextValue = clamp(Math.round(rawValue / safeStep) * safeStep)
+      onChange(nextValue >= max - safeStep ? max : nextValue)
+    }
+
+    const cleanup = () => {
+      window.removeEventListener("pointermove", handleMove)
+      window.removeEventListener("pointerup", handleUp)
+      window.removeEventListener("pointercancel", handleUp)
+      if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId)
+    }
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return
+      updateFromClientX(moveEvent.clientX)
+    }
+
+    const handleUp = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return
+      cleanup()
+    }
+
+    event.preventDefault()
+    target.setPointerCapture(pointerId)
+    window.addEventListener("pointermove", handleMove)
+    window.addEventListener("pointerup", handleUp)
+    window.addEventListener("pointercancel", handleUp)
+  }
 
   let fillLeftPct = 0
   let fillWidthPct = 100
@@ -63,6 +106,7 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
             <div
               className="stat-knob"
               style={{ left: `${knobPct}%` }}
+              onPointerDown={startKnobDrag}
             />
           </div>
           <input

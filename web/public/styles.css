@@ -482,8 +482,15 @@ body {
   opacity: 0;
   cursor: ew-resize;
   margin: 0;
+  pointer-events: none;
 }
 .stat-range::-webkit-slider-thumb { width: 4px; height: 18px; }
+
+.stat-knob {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: ew-resize;
+}
 
 .stops-option-bar {
   display: flex;
@@ -1184,15 +1191,24 @@ body {
 
 .t-filter-knob {
   position: absolute;
-  top: -4px; bottom: -4px;
-  width: 7px;
+  top: -10px; bottom: -10px;
+  width: 24px;
   transform: translateX(-50%);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  pointer-events: auto;
+  z-index: 10;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.t-filter-knob::before {
+  content: "";
+  position: absolute;
+  inset: 6px 8px;
   background: oklch(0.30 0 0);
   border: 1.5px solid oklch(0.55 0 0);
-  box-shadow: none;
-  pointer-events: none;
-  z-index: 8;
-  cursor: ew-resize;
 }
 
 .t-filter-label {
@@ -1214,7 +1230,10 @@ body {
 
 .t-filter-range {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: -10px;
+  bottom: -10px;
   width: 100%;
   height: 100%;
   opacity: 0;
