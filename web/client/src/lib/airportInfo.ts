@@ -4,11 +4,13 @@ export type AirportInfo = { city: string; country: string; name: string }
 
 const cache = new Map<string, AirportInfo>()
 
+const apiOrigin = (import.meta.env.VITE_API_ORIGIN ?? "").replace(/\/$/, "")
+
 async function fetchCodes(codes: string[]): Promise<void> {
   const missing = codes.filter((c) => !cache.has(c))
   if (missing.length === 0) return
   try {
-    const res = await fetch(`/api/airport-info?codes=${missing.join(",")}`)
+    const res = await fetch(`${apiOrigin}/api/airport-info?codes=${missing.join(",")}`)
     if (!res.ok) return
     const data = (await res.json()) as Record<string, AirportInfo>
     for (const [code, info] of Object.entries(data)) cache.set(code, info)
