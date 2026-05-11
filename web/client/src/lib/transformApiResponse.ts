@@ -210,10 +210,13 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
     return s.length % 2 === 0 ? ((s[m - 1] ?? 0) + (s[m] ?? 0)) / 2 : (s[m] ?? 0)
   }
 
+  const totalDur = (t: Omit<UiTrip, "score">) => t.outbound.duration + (t.inbound?.duration ?? 0)
+  const totalLay = (t: Omit<UiTrip, "score">) => t.outbound.layover  + (t.inbound?.layover  ?? 0)
+
   const medP = med(trips.map(t => t.price))
-  const medD = med(trips.map(t => t.stats.duration))
+  const medD = med(trips.map(totalDur))
   const medS = med(trips.map(t => t.stats.stops))
-  const medL = med(trips.map(t => t.stats.layover))
+  const medL = med(trips.map(totalLay))
 
   const norm = (v: number, median: number) => median === 0 ? 0 : v / median
   const penaltyBase = medP
@@ -221,9 +224,9 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
   const score = (t: Omit<UiTrip, "score">) =>
     t.price +
     penaltyBase * (
-      0.20 * norm(t.stats.duration, medD) +
+      0.20 * norm(totalDur(t), medD) +
       0.10 * norm(t.stats.stops,    medS) +
-      0.10 * norm(t.stats.layover,  medL)
+      0.10 * norm(totalLay(t), medL)
     )
 
   return trips
