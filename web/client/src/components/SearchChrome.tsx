@@ -455,7 +455,7 @@ export function SearchChrome({ onSearch, busy, mode = "bar", initialValues, fixt
             <div className="search-hero-brand">
               fly<span>scan</span>
             </div>
-            <p className="search-hero-sub">Find the best flight deals across all providers.</p>
+            <p className="search-hero-sub">Compare flights across providers and find the best deal.</p>
             <div className="search-hero-card" ref={heroCardRef}>
               <div className="search-hero-airports">
                 <div className="sf-group sf-group--airport" ref={originWrapRef}>
