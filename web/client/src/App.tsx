@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type TouchEvent as ReactTouchEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type TouchEvent as ReactTouchEvent } from "react"
 import { Routes, Route, useNavigate, useSearchParams } from "react-router-dom"
 import { SearchChrome } from "./components/SearchChrome"
 import type { Filters } from "./components/Sidebar"
@@ -7,6 +7,7 @@ import { StopsFilterBar } from "./components/StopsFilterBar"
 import { TimelineBar } from "./components/TimelineBar"
 import { BookModal } from "./components/BookModal"
 import { transformApiResponse, type ApiPayload, type UiTrip } from "./lib/transformApiResponse"
+import { useAirportInfo } from "./lib/airportInfo"
 
 const apiOrigin = (import.meta.env.VITE_API_ORIGIN ?? "").replace(/\/$/, "")
 const apiUrl = (path: string) => `${apiOrigin}${path}`
@@ -257,6 +258,17 @@ function SearchPage() {
   const clampedIdx   = visible.length > 0 ? Math.min(idx, visible.length - 1) : 0
   const trip         = visible[clampedIdx] ?? allTrips[0] ?? null
   const airlineColors = buildAirlineColorMap(allTrips)
+
+  const airportCodes = useMemo(() => {
+    const codes = new Set<string>()
+    for (const t of allTrips) {
+      for (const fl of t.outbound.flights) { codes.add(fl.from); codes.add(fl.to) }
+      if (t.inbound) for (const fl of t.inbound.flights) { codes.add(fl.from); codes.add(fl.to) }
+    }
+    return [...codes]
+  }, [allTrips])
+  const airportInfo = useAirportInfo(airportCodes)
+
   // Timeline axis spans the "knobs at max" set so the range stays stable while dragging
   const timelineTrips = cutoffActive && cutoff ? filterTrips(allTrips, cutoff) : allTrips
   const outboundRange = getTimelineRange(timelineTrips, t => t.outbound.flights)
@@ -296,7 +308,7 @@ function SearchPage() {
   function shouldIgnoreSwipeTarget(target: EventTarget | null): boolean {
     if (!(target instanceof Element)) return false
     if (target.closest(
-      "button, a, input, select, textarea, label, [role='button'], .stat-bar-wrap, .stops-filter-bar, .t-filter-knob, .t-filter-range",
+      "button, a, input, select, textarea, label, [role='button'], .stops-filter-bar, .stat-knob, .t-filter-knob, .t-filter-range, .sf-group, .sf-suggest",
     )) return true
 
     const timelineShell = target.closest(".timeline-scroll-shell")
@@ -549,12 +561,31 @@ function SearchPage() {
     return () => { window.flyscan = undefined }
   }, [])
 
+  // Track search bar height for sticky nav-row offset on mobile
+  useEffect(() => {
+    const el = document.querySelector(".search-bar")
+    if (!el) return
+    const update = () => {
+      document.documentElement.style.setProperty("--search-bar-h", `${el.getBoundingClientRect().height}px`)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   const initialValues = urlFrom && urlTo
     ? { origin: urlFrom, destination: urlTo, departureDate: urlDep, returnDate: urlRet, roundTrip: Boolean(urlRet) }
     : undefined
 
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell trip-swipe-shell"
+      onTouchStart={handleTripTouchStart}
+      onTouchMove={handleTripTouchMove}
+      onTouchEnd={handleTripTouchEnd}
+      onTouchCancel={handleTripTouchCancel}
+    >
       <a href="#main-content" className="skip-nav">Skip to results</a>
       <SearchChrome
         onSearch={onSearch}
@@ -567,11 +598,7 @@ function SearchPage() {
       <div className="workspace">
         <main
           id="main-content"
-          className="main-col trip-swipe-shell"
-          onTouchStart={handleTripTouchStart}
-          onTouchMove={handleTripTouchMove}
-          onTouchEnd={handleTripTouchEnd}
-          onTouchCancel={handleTripTouchCancel}
+          className="main-col"
         >
           {swipePreview && (
             <div
@@ -793,6 +820,7 @@ function SearchPage() {
                       flights={noMatch ? [] : trip.outbound.flights}
                       range={outboundRange}
                       airlineColors={airlineColors}
+                      airportInfo={airportInfo}
                       depKnob={outboundRange ? { value: outDepFilter ?? outboundRange.start, onChange: setOutDepFilter } : undefined}
                       arrKnob={outboundRange ? { value: outArrFilter ?? outboundRange.end,   onChange: setOutArrFilter } : undefined}
                     />
@@ -816,6 +844,7 @@ function SearchPage() {
                         flights={noMatch ? [] : trip.inbound.flights}
                         range={inboundRange}
                         airlineColors={airlineColors}
+                        airportInfo={airportInfo}
                         depKnob={inboundRange ? { value: inDepFilter ?? inboundRange.start, onChange: setInDepFilter } : undefined}
                         arrKnob={inboundRange ? { value: inArrFilter ?? inboundRange.end,   onChange: setInArrFilter } : undefined}
                       />

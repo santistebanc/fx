@@ -17,6 +17,7 @@ import {
   type StoredAirport,
 } from "../lib/recentAirports"
 import { isIsoDate, readInitialSearchChromeState, saveLastSearch } from "../lib/lastSearch"
+import { useAirportInfo } from "../lib/airportInfo"
 
 type SearchChromeProps = {
   onSearch: (body: Record<string, unknown>) => Promise<void>
@@ -60,6 +61,15 @@ function mergeSuggestions(recent: AirportSuggestion[], remote: AirportSuggestion
 function fmtShort(iso: string): string {
   const d = new Date(iso + "T12:00:00Z")
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+}
+
+/** Split "City, Country - Airport Name (IATA)" into { cityCountry, airportName } */
+function parseSuggestionLabel(label: string): { cityCountry: string; airportName: string } {
+  const dashIdx = label.indexOf(" - ")
+  if (dashIdx < 0) return { cityCountry: label, airportName: "" }
+  const cityCountry = label.slice(0, dashIdx)
+  const airportName = label.slice(dashIdx + 3).replace(/\s*\([A-Z]{3}\)\s*$/, "").trim()
+  return { cityCountry, airportName }
 }
 
 /** Valid IATA from typed text, or null if none can be resolved yet. */
@@ -159,6 +169,14 @@ export function SearchChrome({ onSearch, busy, mode = "bar", initialValues, fixt
 
   const originCode = parseAirportCode(origin)
   const destinationCode = parseAirportCode(destination)
+
+  const airportCodes = useMemo(() => {
+    const codes: string[] = []
+    if (originCode) codes.push(originCode)
+    if (destinationCode) codes.push(destinationCode)
+    return codes
+  }, [originCode, destinationCode])
+  const airportInfo = useAirportInfo(airportCodes)
   const datesOk =
     isIsoDate(departureDate) && (!roundTrip || (returnDate.trim().length > 0 && isIsoDate(returnDate)))
   const canSearch = Boolean(originCode && destinationCode && originCode !== destinationCode && datesOk && !busy)
@@ -281,6 +299,10 @@ export function SearchChrome({ onSearch, busy, mode = "bar", initialValues, fixt
   const showDestinationSuggestions =
     destinationFocus && (destinationLoading || destinationSuggestions.length > 0)
 
+  const originInputRef = useRef<HTMLInputElement>(null)
+  const destInputRef = useRef<HTMLInputElement>(null)
+  const originSelecting = useRef(false)
+  const destSelecting = useRef(false)
   const originWrapRef = useRef<HTMLDivElement>(null)
   const destWrapRef = useRef<HTMLDivElement>(null)
   const heroCardRef = useRef<HTMLDivElement>(null)
@@ -342,15 +364,25 @@ export function SearchChrome({ onSearch, busy, mode = "bar", initialValues, fixt
             className={`airport-suggest-item${isRecentRow ? " airport-suggest-item--recent" : ""}`}
             onMouseDown={(e) => {
               e.preventDefault()
+              originSelecting.current = true
               setOrigin(s.code)
               rememberAirport(s.code, s.label)
               refreshRecents()
               setOriginRemote([])
               setOriginFocus(false)
+              originInputRef.current?.blur()
             }}
           >
             <span className="airport-suggest-code">{s.code}</span>
-            {s.label && s.label !== s.code && <span className="airport-suggest-label">{s.label}</span>}
+            {s.label && s.label !== s.code && (() => {
+              const { cityCountry, airportName } = parseSuggestionLabel(s.label)
+              return (
+                <span className="airport-suggest-label">
+                  <span className="airport-suggest-city">{cityCountry}</span>
+                  {airportName && <span className="airport-suggest-airport"> · {airportName}</span>}
+                </span>
+              )
+            })()}
           </button>
         )
       })}
@@ -371,15 +403,25 @@ export function SearchChrome({ onSearch, busy, mode = "bar", initialValues, fixt
             className={`airport-suggest-item${isRecentRow ? " airport-suggest-item--recent" : ""}`}
             onMouseDown={(e) => {
               e.preventDefault()
+              destSelecting.current = true
               setDestination(s.code)
               rememberAirport(s.code, s.label)
               refreshRecents()
               setDestinationRemote([])
               setDestinationFocus(false)
+              destInputRef.current?.blur()
             }}
           >
             <span className="airport-suggest-code">{s.code}</span>
-            {s.label && s.label !== s.code && <span className="airport-suggest-label">{s.label}</span>}
+            {s.label && s.label !== s.code && (() => {
+              const { cityCountry, airportName } = parseSuggestionLabel(s.label)
+              return (
+                <span className="airport-suggest-label">
+                  <span className="airport-suggest-city">{cityCountry}</span>
+                  {airportName && <span className="airport-suggest-airport"> · {airportName}</span>}
+                </span>
+              )
+            })()}
           </button>
         )
       })}
@@ -418,47 +460,61 @@ export function SearchChrome({ onSearch, busy, mode = "bar", initialValues, fixt
               <div className="search-hero-airports">
                 <div className="sf-group sf-group--airport" ref={originWrapRef}>
                   <span className="sf-label">FROM</span>
-                  <input
-                    className="sf-val sf-input"
-                    value={origin}
-                    maxLength={40}
-                    autoCapitalize="characters"
-                    spellCheck={false}
-                    placeholder="BCN"
-                    onChange={e => setOrigin(e.target.value)}
-                    onFocus={() => setOriginFocus(true)}
-                    onBlur={() => {
-                      setOriginFocus(false)
-                      const raw = origin.trim()
-                      const code = parseAirportCode(raw)
-                      setOrigin(code ?? raw)
-                      if (code) rememberAirport(code)
-                      refreshRecents()
-                    }}
-                  />
+                  <label className="sf-val-row">
+                    <input
+                      ref={originInputRef}
+                      className="sf-val sf-input"
+                      value={origin}
+                      maxLength={40}
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      placeholder="BCN"
+                      onChange={e => setOrigin(e.target.value)}
+                      onFocus={(e) => { setOriginFocus(true); e.target.select() }}
+                      onBlur={() => {
+                        setOriginFocus(false)
+                        if (originSelecting.current) { originSelecting.current = false; return }
+                        const raw = origin.trim()
+                        const code = parseAirportCode(raw)
+                        setOrigin(code ?? raw)
+                        if (code) rememberAirport(code)
+                        refreshRecents()
+                      }}
+                    />
+                    {originCode && airportInfo[originCode] && (
+                      <span className="sf-airport-location">{airportInfo[originCode].city}</span>
+                    )}
+                  </label>
                   {originSuggestDropdown}
                 </div>
                 <div className="search-hero-arrow" aria-hidden="true">→</div>
                 <div className="sf-group sf-group--airport" ref={destWrapRef}>
                   <span className="sf-label">TO</span>
-                  <input
-                    className="sf-val sf-input"
-                    value={destination}
-                    maxLength={40}
-                    autoCapitalize="characters"
-                    spellCheck={false}
-                    placeholder="LHR"
-                    onChange={e => setDestination(e.target.value)}
-                    onFocus={() => setDestinationFocus(true)}
-                    onBlur={() => {
-                      setDestinationFocus(false)
-                      const raw = destination.trim()
-                      const code = parseAirportCode(raw)
-                      setDestination(code ?? raw)
-                      if (code) rememberAirport(code)
-                      refreshRecents()
-                    }}
-                  />
+                  <label className="sf-val-row">
+                    <input
+                      ref={destInputRef}
+                      className="sf-val sf-input"
+                      value={destination}
+                      maxLength={40}
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      placeholder="LHR"
+                      onChange={e => setDestination(e.target.value)}
+                      onFocus={(e) => { setDestinationFocus(true); e.target.select() }}
+                      onBlur={() => {
+                        setDestinationFocus(false)
+                        if (destSelecting.current) { destSelecting.current = false; return }
+                        const raw = destination.trim()
+                        const code = parseAirportCode(raw)
+                        setDestination(code ?? raw)
+                        if (code) rememberAirport(code)
+                        refreshRecents()
+                      }}
+                    />
+                    {destinationCode && airportInfo[destinationCode] && (
+                      <span className="sf-airport-location">{airportInfo[destinationCode].city}</span>
+                    )}
+                  </label>
                   {destSuggestDropdown}
                 </div>
               </div>
@@ -512,45 +568,59 @@ export function SearchChrome({ onSearch, busy, mode = "bar", initialValues, fixt
 
           <div className="sf-group sf-group--airport" ref={originWrapRef}>
             <span className="sf-label">FROM</span>
-            <input
-              className="sf-val sf-input"
-              value={origin}
-              maxLength={40}
-              autoCapitalize="characters"
-              spellCheck={false}
-              onChange={e => setOrigin(e.target.value)}
-              onFocus={() => setOriginFocus(true)}
-              onBlur={() => {
-                setOriginFocus(false)
-                const raw = origin.trim()
-                const code = parseAirportCode(raw)
-                setOrigin(code ?? raw)
-                if (code) rememberAirport(code)
-                refreshRecents()
-              }}
-            />
+            <label className="sf-val-row">
+              <input
+                ref={originInputRef}
+                className="sf-val sf-input"
+                value={origin}
+                maxLength={40}
+                autoCapitalize="characters"
+                spellCheck={false}
+                onChange={e => setOrigin(e.target.value)}
+                onFocus={(e) => { setOriginFocus(true); e.target.select() }}
+                onBlur={() => {
+                  setOriginFocus(false)
+                  if (originSelecting.current) { originSelecting.current = false; return }
+                  const raw = origin.trim()
+                  const code = parseAirportCode(raw)
+                  setOrigin(code ?? raw)
+                  if (code) rememberAirport(code)
+                  refreshRecents()
+                }}
+              />
+              {!originFocus && originCode && airportInfo[originCode] && (
+                <span className="sf-airport-location">{airportInfo[originCode].city}</span>
+              )}
+            </label>
             {originSuggestDropdown}
           </div>
 
           <div className="sf-group sf-group--airport" ref={destWrapRef}>
             <span className="sf-label">TO</span>
-            <input
-              className="sf-val sf-input"
-              value={destination}
-              maxLength={40}
-              autoCapitalize="characters"
-              spellCheck={false}
-              onChange={e => setDestination(e.target.value)}
-              onFocus={() => setDestinationFocus(true)}
-              onBlur={() => {
-                setDestinationFocus(false)
-                const raw = destination.trim()
-                const code = parseAirportCode(raw)
-                setDestination(code ?? raw)
-                if (code) rememberAirport(code)
-                refreshRecents()
-              }}
-            />
+            <label className="sf-val-row">
+              <input
+                ref={destInputRef}
+                className="sf-val sf-input"
+                value={destination}
+                maxLength={40}
+                autoCapitalize="characters"
+                spellCheck={false}
+                onChange={e => setDestination(e.target.value)}
+                onFocus={(e) => { setDestinationFocus(true); e.target.select() }}
+                onBlur={() => {
+                  setDestinationFocus(false)
+                  if (destSelecting.current) { destSelecting.current = false; return }
+                  const raw = destination.trim()
+                  const code = parseAirportCode(raw)
+                  setDestination(code ?? raw)
+                  if (code) rememberAirport(code)
+                  refreshRecents()
+                }}
+              />
+              {!destinationFocus && destinationCode && airportInfo[destinationCode] && (
+                <span className="sf-airport-location">{airportInfo[destinationCode].city}</span>
+              )}
+            </label>
             {destSuggestDropdown}
           </div>
 

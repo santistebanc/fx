@@ -184,9 +184,8 @@ export function transformApiResponse(payload: ApiPayload): UiTrip[] {
     const outboundStops = Math.max(0, outbound.flights.length - 1)
     const returnStops = inbound ? Math.max(0, inbound.flights.length - 1) : 0
     const stops = outboundStops + returnStops
-    const directionCount = inbound ? 2 : 1
-    const avgDuration = Math.round((outbound.duration + (inbound?.duration ?? 0)) / directionCount)
-    const avgLayover = Math.round((outbound.layover + (inbound?.layover ?? 0)) / directionCount)
+    const avgDuration = Math.max(outbound.duration, inbound?.duration ?? 0)
+    const avgLayover = Math.max(outbound.layover, inbound?.layover ?? 0)
 
     trips.push({
       id: tripId,

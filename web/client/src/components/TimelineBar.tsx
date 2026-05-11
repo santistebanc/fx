@@ -1,6 +1,7 @@
 import { useState } from "react"
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react"
 import type { UiFlight } from "../lib/transformApiResponse"
+import type { AirportInfo } from "../lib/airportInfo"
 
 const KNOB_STEP_MS = 5 * 60 * 1000 // 5 min
 
@@ -19,7 +20,7 @@ function fmtDur(minutes: number): string {
 
 type Seg = { type: "flight"; index: number; leftPct: number; widthPct: number; flight: UiFlight }
 type SegLabel = { key: string; pct: number; code: string; side: "left" | "right"; intermediate: boolean; endpoint: boolean; origin: boolean }
-type SpanLabel = { key: string; kind: "layover"; leftPct: number; widthPct: number; text: string; showText: boolean }
+type SpanLabel = { key: string; kind: "layover"; leftPct: number; widthPct: number; text: string; airportCode: string }
 
 type TimelineRange = { start: number; end: number }
 
@@ -61,9 +62,6 @@ function snapToStep(value: number, step: number): number {
   return Math.round(value / step) * step
 }
 
-function minSpanLabelWidthPct(text: string): number {
-  return Math.max(2, text.length * 0.4)
-}
 
 export function TimelineBar({
   flights,
@@ -72,6 +70,7 @@ export function TimelineBar({
   airlineColors,
   depKnob,
   arrKnob,
+  airportInfo = {},
 }: {
   flights: UiFlight[]
   showLegs?: boolean
@@ -79,6 +78,7 @@ export function TimelineBar({
   airlineColors?: Record<string, string>
   depKnob?: KnobFilter
   arrKnob?: KnobFilter
+  airportInfo?: Record<string, AirportInfo>
 }) {
   const fallbackRange = flights.length > 0
     ? { start: flights[0].depAt, end: flights[flights.length - 1].arrAt }
@@ -94,7 +94,11 @@ export function TimelineBar({
     ...(flights.length > 0 ? buildSpanHourMarks(flights[flights.length - 1]!.arrAt, timelineRange.end, timelineRange) : []),
   ]
   const [legsExpanded, setLegsExpanded] = useState(false)
-  const [mobileZoomed, setMobileZoomed] = useState(false)
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const ZOOM_STEPS = [1, 1.5, 2, 3, 4]
+  const zoomIdx = ZOOM_STEPS.indexOf(zoomLevel) === -1 ? 0 : ZOOM_STEPS.indexOf(zoomLevel)
+  const canZoomIn = zoomIdx < ZOOM_STEPS.length - 1
+  const canZoomOut = zoomIdx > 0
 
   const boundaries: Boundary[] = []
   flights.forEach((fl, i) => {
@@ -175,14 +179,13 @@ export function TimelineBar({
       const leftPct = ((fl.arrAt - timelineRange.start) / 60000 / totalMin) * 100
       const widthPct = ((next.depAt - fl.arrAt) / 60000 / totalMin) * 100
       const text = fmtDur(Math.max(0, Math.round((next.depAt - fl.arrAt) / 60000)))
-      const minWidthPct = minSpanLabelWidthPct(text)
       return [{
         key: `layover-dur-${i}`,
         kind: "layover" as const,
         leftPct,
         widthPct,
         text,
-        showText: widthPct >= minWidthPct,
+        airportCode: fl.to,
       }]
     })
 
@@ -241,9 +244,9 @@ export function TimelineBar({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0, width: "100%" }}>
-      <div className={`timeline-wrap${mobileZoomed ? " timeline-wrap--zoomed" : ""}`}>
+      <div className={`timeline-wrap${zoomLevel > 1 ? " timeline-wrap--zoomed" : ""}`}>
         <div className="timeline-scroll-shell">
-          <div className="timeline-scroll-inner">
+          <div className="timeline-scroll-inner" style={zoomLevel > 1 ? { width: `${zoomLevel * 100}%` } : undefined}>
             <div className="timeline-track-wrap">
               <div className="timeline-hour-labels">
                 {hourLabels.map((l, i) => (
@@ -328,34 +331,42 @@ export function TimelineBar({
                     style={{ left: `${m.pct}%` }}
                   />
                 ))}
-                {spanLabels.map((label) => (
-                  <span
-                    key={label.key}
-                    className={`t-span-label t-span-label--${label.kind}${label.showText ? "" : " t-span-label--empty"}`}
-                    style={{ left: `${label.leftPct}%`, width: `${label.widthPct}%` }}
-                  >
-                    {label.showText ? label.text : ""}
-                  </span>
-                ))}
-                {segLabels.map((label) => (
-                  <span
-                    key={label.key}
-                    className={[
-                      "t-seg-iata",
-                      label.side === "left" ? "t-seg-iata--left" : "t-seg-iata--right",
-                      label.intermediate ? "t-seg-iata--intermediate" : "",
-                      label.endpoint ? "t-seg-iata--endpoint" : "",
-                      label.origin ? "t-seg-iata--origin" : "",
-                    ].filter(Boolean).join(" ")}
-                    style={{ left: `${label.pct}%` }}
-                  >
-                    {label.code}
-                  </span>
-                ))}
+                {spanLabels.map((label) => {
+                  const info = airportInfo[label.airportCode]
+                  const loc = info ? `${info.city}, ${info.country}` : null
+                  return (
+                    <span
+                      key={label.key}
+                      className={`t-span-label t-span-label--${label.kind}`}
+                      style={{ left: `${label.leftPct}%`, width: `${label.widthPct}%` }}
+                      title={`${label.text} layover · ${label.airportCode}${loc ? ` · ${loc}` : ""}`}
+                    >
+                      <span>{label.text}</span>
+                    </span>
+                  )
+                })}
+                {segLabels.map((label) => {
+                  const info = airportInfo[label.code]
+                  const loc = info ? `${info.city}, ${info.country}` : null
+                  return (
+                    <span
+                      key={label.key}
+                      className={[
+                        "t-seg-iata",
+                        label.side === "left" ? "t-seg-iata--left" : "t-seg-iata--right",
+                        label.intermediate ? "t-seg-iata--intermediate" : "",
+                        label.endpoint ? "t-seg-iata--endpoint" : "",
+                        label.origin ? "t-seg-iata--origin" : "",
+                      ].filter(Boolean).join(" ")}
+                      style={{ left: `${label.pct}%` }}
+                      title={loc ? `${label.code} · ${loc}` : label.code}
+                    >
+                      {label.code}
+                    </span>
+                  )
+                })}
                 {segs.map((seg) => {
                   const fl = seg.flight
-                  const flightDuration = fmtDur(fl.dur)
-                  const showFlightDuration = seg.widthPct >= minSpanLabelWidthPct(flightDuration)
                   return (
                     <div
                       key={`fl-${seg.index}`}
@@ -363,11 +374,9 @@ export function TimelineBar({
                       style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, background: airlineColor(fl.airline) }}
                       title={`${fl.from}→${fl.to}  ${fl.dep}–${fl.arr}  ${fmtDur(fl.dur)}  ·  ${fl.airline} ${fl.fn}`}
                     >
-                      {showFlightDuration && (
-                        <span className="t-span-label t-span-label--flight t-span-label--in-seg">
-                          {flightDuration}
-                        </span>
-                      )}
+                      <span className="t-span-label t-span-label--flight t-span-label--in-seg">
+                        <span>{fmtDur(fl.dur)}</span>
+                      </span>
                     </div>
                   )
                 })}
@@ -388,39 +397,63 @@ export function TimelineBar({
             {legsExpanded ? "Hide leg details" : "Show leg details"}
           </button>
         )}
-        <button
-          type="button"
-          className={`timeline-zoom-toggle${mobileZoomed ? " timeline-zoom-toggle--active" : ""}`}
-          aria-pressed={mobileZoomed}
-          aria-label={mobileZoomed ? "Fit timeline to screen" : "Zoom timeline"}
-          title={mobileZoomed ? "Fit timeline to screen" : "Zoom timeline"}
-          onClick={() => setMobileZoomed((value) => !value)}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true" className="timeline-zoom-icon">
-            <path d="M6 2H2v4M10 2h4v4M14 10v4h-4M2 10v4h4" />
-          </svg>
-        </button>
+        <div className="timeline-zoom-btns">
+          <button
+            type="button"
+            className="timeline-zoom-toggle"
+            disabled={!canZoomOut}
+            aria-label="Zoom out timeline"
+            title="Zoom out"
+            onClick={() => setZoomLevel(ZOOM_STEPS[zoomIdx - 1]!)}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true" className="timeline-zoom-icon">
+              <path d="M3 8h10" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="timeline-zoom-toggle"
+            disabled={!canZoomIn}
+            aria-label="Zoom in timeline"
+            title="Zoom in"
+            onClick={() => setZoomLevel(ZOOM_STEPS[zoomIdx + 1]!)}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true" className="timeline-zoom-icon">
+              <path d="M8 3v10M3 8h10" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {showLegs && legsExpanded && (
         <div className="leg-list">
-          {flights.map((fl, i) => (
-            <div key={`leg-wrap-${i}`}>
-              <div className="leg-item">
-                <span className="leg-color-dot" style={{ background: airlineColor(fl.airline) }} />
-                <span className="leg-route">{fl.from} → {fl.to}</span>
-                <span className="leg-time">{fl.dep} – {fl.arr}</span>
-                <span className="leg-airline">{fl.airline} · {fl.fn}</span>
-                <span className="leg-duration">{fmtDur(fl.dur)}</span>
-              </div>
-              {fl.conn != null && fl.conn > 0 && i < flights.length - 1 && (
-                <div className="layover-row">
-                  <span className="layover-dot" />
-                  Layover at {fl.to} · {fmtDur(fl.conn)}
+          {flights.map((fl, i) => {
+            const fromInfo = airportInfo[fl.from]
+            const toInfo = airportInfo[fl.to]
+            const layoverInfo = airportInfo[fl.to]
+            return (
+              <div key={`leg-wrap-${i}`}>
+                <div className="leg-item">
+                  <span className="leg-color-dot" style={{ background: airlineColor(fl.airline) }} />
+                  <span className="leg-route">
+                    {fl.from}{fromInfo ? <span className="leg-city"> · {fromInfo.city}</span> : ""}{" → "}{fl.to}{toInfo ? <span className="leg-city"> · {toInfo.city}</span> : ""}
+                  </span>
+                  <span className="leg-time">{fl.dep} – {fl.arr}</span>
+                  <span className="leg-airline">{fl.airline} · {fl.fn}</span>
+                  <span className="leg-duration">{fmtDur(fl.dur)}</span>
                 </div>
-              )}
-            </div>
-          ))}
+                {fl.conn != null && fl.conn > 0 && i < flights.length - 1 && (
+                  <div
+                    className="layover-row"
+                    title={layoverInfo ? `${fl.to} · ${layoverInfo.city}, ${layoverInfo.country}` : fl.to}
+                  >
+                    <span className="layover-dot" />
+                    Layover at {fl.to}{layoverInfo ? <span className="leg-city"> · {layoverInfo.city}</span> : ""} · {fmtDur(fl.conn)}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

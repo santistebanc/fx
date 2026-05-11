@@ -258,6 +258,35 @@ const parseAirportSuggestions = (raw: unknown): AirportSuggestion[] => {
     .filter((s): s is AirportSuggestion => Boolean(s))
 }
 
+type AirportInfo = { city: string; country: string; name: string }
+const airportInfoCache = new Map<string, AirportInfo>()
+
+async function lookupAirportInfo(code: string): Promise<AirportInfo | null> {
+  const hit = airportInfoCache.get(code)
+  if (hit) return hit
+  try {
+    const upstream = await fetch(`${AIRPORT_AUTOCOMPLETE_URL}?term=${encodeURIComponent(code)}`)
+    if (!upstream.ok) return null
+    const payload = await upstream.json().catch(() => null)
+    const suggestions = parseAirportSuggestions(payload)
+    const match = suggestions.find((s) => s.code === code)
+    if (!match) return null
+    // Label format: "City, Country - Airport Name (IATA)"
+    const dashIdx = match.label.indexOf(" - ")
+    const cityCountry = dashIdx > 0 ? match.label.slice(0, dashIdx) : match.label
+    const lastComma = cityCountry.lastIndexOf(", ")
+    const city = lastComma > 0 ? cityCountry.slice(0, lastComma) : cityCountry
+    const country = lastComma > 0 ? cityCountry.slice(lastComma + 2) : ""
+    const nameWithCode = dashIdx > 0 ? match.label.slice(dashIdx + 3) : ""
+    const name = nameWithCode.replace(/\s*\([A-Z]{3}\)\s*$/, "").trim()
+    const info: AirportInfo = { city, country, name }
+    airportInfoCache.set(code, info)
+    return info
+  } catch {
+    return null
+  }
+}
+
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 
 type CacheEntry = { payload: unknown; expiresAt: number }
@@ -367,6 +396,18 @@ Bun.serve({
       } catch {
         return jsonResponse(req, { error: "Airport autocomplete unavailable" }, 502)
       }
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/airport-info") {
+      const codes = (url.searchParams.get("codes") ?? "")
+        .split(",")
+        .map((s) => s.trim().toUpperCase())
+        .filter((c) => /^[A-Z]{3}$/.test(c))
+        .slice(0, 30)
+      const results = await Promise.all(codes.map(async (code) => [code, await lookupAirportInfo(code)] as const))
+      const data: Record<string, AirportInfo> = {}
+      for (const [code, info] of results) if (info) data[code] = info
+      return jsonResponse(req, data)
     }
 
     if (req.method === "POST" && url.pathname === "/api/search") {
