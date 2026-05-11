@@ -2055,7 +2055,12 @@ body {
   font-size: 1.3rem;
   font-weight: 800;
   letter-spacing: 0.02em;
-  width: 100%;
+}
+
+.search-hero-airports .sf-airport-location {
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .search-hero-arrow {
