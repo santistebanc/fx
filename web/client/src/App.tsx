@@ -57,6 +57,12 @@ function fmtDur(minutes: number): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`
 }
 
+function fmtDurFull(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${h}h ${String(m).padStart(2, "0")}m`
+}
+
 type TimeFilters = {
   outDepAfter: number | null
   outArrBefore: number | null
@@ -549,6 +555,7 @@ function SearchPage() {
 
   return (
     <div className="app-shell">
+      <a href="#main-content" className="skip-nav">Skip to results</a>
       <SearchChrome
         onSearch={onSearch}
         busy={status === "loading"}
@@ -559,6 +566,7 @@ function SearchPage() {
 
       <div className="workspace">
         <main
+          id="main-content"
           className="main-col trip-swipe-shell"
           onTouchStart={handleTripTouchStart}
           onTouchMove={handleTripTouchMove}
@@ -702,7 +710,7 @@ function SearchPage() {
                         <StatSlider
                           label="Duration" hideLabel
                           value={filters.duration} min={absMinDur} max={sliderMaxDur} step={30}
-                          format={fmtDur}
+                          format={fmtDurFull}
                           onChange={v => setFilter("duration", v)}
                           tripValue={noMatch ? null : trip.stats.duration}
                         />
@@ -717,7 +725,7 @@ function SearchPage() {
                         <StatSlider
                           label="Layover" hideLabel
                           value={filters.layover} min={absMinLay} max={sliderMaxLay} step={15}
-                          format={fmtDur}
+                          format={fmtDurFull}
                           onChange={v => setFilter("layover", v)}
                           tripValue={noMatch ? null : trip.stats.layover}
                         />

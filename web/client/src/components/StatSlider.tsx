@@ -1,4 +1,5 @@
-import type { PointerEvent as ReactPointerEvent } from "react"
+import { useRef } from "react"
+import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent } from "react"
 
 type StatSliderProps = {
   label: string
@@ -9,7 +10,6 @@ type StatSliderProps = {
   format: (v: number) => string
   onChange: (v: number) => void
   tripValue?: number | null
-  /** When set, the label row is omitted (e.g. label shown elsewhere). */
   hideLabel?: boolean
 }
 
@@ -18,6 +18,7 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
   const clamp = (v: number) => Math.min(Math.max(v, min), max)
   const knobValue = clamp(value)
   const safeStep = step > 0 ? step : 1
+  const knobRef = useRef<HTMLDivElement>(null)
 
   const startKnobDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     const track = event.currentTarget.closest(".stat-track")
@@ -29,7 +30,6 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
     const updateFromClientX = (clientX: number) => {
       const rect = track.getBoundingClientRect()
       if (rect.width <= 0) return
-
       const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
       const rawValue = min + pct * range
       const nextValue = clamp(Math.round(rawValue / safeStep) * safeStep)
@@ -41,10 +41,15 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
       window.removeEventListener("pointerup", handleUp)
       window.removeEventListener("pointercancel", handleUp)
       if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId)
+      if (knobRef.current) knobRef.current.style.transition = ""
     }
 
     const handleMove = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return
+      const rect = track.getBoundingClientRect()
+      if (rect.width <= 0) return
+      const pct = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width))
+      if (knobRef.current) knobRef.current.style.setProperty("--knob-pos", `${pct * 100}%`)
       updateFromClientX(moveEvent.clientX)
     }
 
@@ -54,10 +59,22 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
     }
 
     event.preventDefault()
+    if (knobRef.current) knobRef.current.style.transition = "none"
     target.setPointerCapture(pointerId)
     window.addEventListener("pointermove", handleMove)
     window.addEventListener("pointerup", handleUp)
     window.addEventListener("pointercancel", handleUp)
+  }
+
+  const handleKnobKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    let delta = 0
+    if (e.key === "ArrowLeft" || e.key === "ArrowDown") delta = -safeStep
+    else if (e.key === "ArrowRight" || e.key === "ArrowUp") delta = safeStep
+    else if (e.key === "Home") { onChange(min); return }
+    else if (e.key === "End") { onChange(max); return }
+    else return
+    e.preventDefault()
+    onChange(clamp(knobValue + delta))
   }
 
   let fillLeftPct = 0
@@ -77,7 +94,6 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
   }
 
   const knobPct = range > 0 ? ((knobValue - min) / range) * 100 : 100
-  const hatchWidthPct = 100 - knobPct
 
   return (
     <div className="stat-row">
@@ -92,25 +108,32 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
             <div
               className="stat-fill"
               style={{
-                left: `${fillLeftPct}%`,
-                width: `${fillWidthPct}%`,
-              }}
+                '--fill-left': `${fillLeftPct}%`,
+                '--fill-right': `${fillLeftPct + fillWidthPct}%`,
+              } as CSSProperties}
             />
             <div
               className="stat-hatch"
-              style={{
-                left: `${knobPct}%`,
-                width: `${hatchWidthPct}%`,
-              }}
+              style={{ '--hatch-left': `${knobPct}%` } as CSSProperties}
             />
             <div
+              ref={knobRef}
+              role="slider"
+              tabIndex={0}
+              aria-label={label}
+              aria-valuenow={knobValue}
+              aria-valuemin={min}
+              aria-valuemax={max}
+              aria-valuetext={format(knobValue)}
               className="stat-knob"
-              style={{ left: `${knobPct}%` }}
+              style={{ '--knob-pos': `${knobPct}%` } as CSSProperties}
               onPointerDown={startKnobDrag}
+              onKeyDown={handleKnobKey}
             />
           </div>
           <input
             type="range"
+            tabIndex={-1}
             className="stat-range"
             min={min}
             max={max}
@@ -118,20 +141,17 @@ export function StatSlider({ label, value, min, max, step, format, onChange, tri
             value={value}
             onChange={e => {
               const raw = Number(e.target.value)
-              // Range inputs cannot emit `max` if step doesn't divide (max - min).
-              // Snap near the right edge so users can always reach the hard limit.
               onChange(raw >= max - safeStep ? max : raw)
             }}
-            aria-label={hideLabel ? label : undefined}
+            aria-hidden="true"
           />
         </div>
         <div className="stat-bounds-wrap">
           <div
             className="stat-slider-bounds"
-            aria-label={`${format(min)} to ${format(knobValue)}`}
+            aria-hidden="true"
           >
             <span className="stat-bound-min">{format(min)}</span>
-            <span className="stat-bound-sep"> - </span>
             <span className="stat-bound-value">{format(knobValue)}</span>
           </div>
         </div>

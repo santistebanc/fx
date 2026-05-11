@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { PointerEvent as ReactPointerEvent } from "react"
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react"
 import type { UiFlight } from "../lib/transformApiResponse"
 
 const KNOB_STEP_MS = 5 * 60 * 1000 // 5 min
@@ -62,7 +62,7 @@ function snapToStep(value: number, step: number): number {
 }
 
 function minSpanLabelWidthPct(text: string): number {
-  return Math.max(8, text.length * 1.35)
+  return Math.max(2, text.length * 0.4)
 }
 
 export function TimelineBar({
@@ -101,7 +101,7 @@ export function TimelineBar({
     const depPct = ((fl.depAt - timelineRange.start) / 60000 / totalMin) * 100
     boundaries.push({ pct: depPct, time: fl.dep, isFirst: i === 0, isLast: false, which: "dep" })
     const arrPct = ((fl.arrAt - timelineRange.start) / 60000 / totalMin) * 100
-    boundaries.push({ pct: arrPct, time: fl.arr, isFirst: false, isLast: i === flights.length - 1, which: "arr" })
+    boundaries.push({ pct: arrPct, time: fl.arr.replace(/\+\d+$/, ""), isFirst: false, isLast: i === flights.length - 1, which: "arr" })
   })
 
   const hourLabels = (() => {
@@ -257,7 +257,7 @@ export function TimelineBar({
                   <span
                     key={`dep-${i}`}
                     className={`t-time${b.isFirst ? " t-time--first" : ""}`}
-                    style={{ left: `${b.pct}%` }}
+                    style={{ '--t-pos': `${b.pct}%` } as CSSProperties}
                   >
                     {b.time}
                   </span>
@@ -268,7 +268,7 @@ export function TimelineBar({
                   <span
                     key={`arr-${i}`}
                     className={`t-time${b.isLast ? " t-time--last" : ""}`}
-                    style={{ left: `${b.pct}%` }}
+                    style={{ '--t-pos': `${b.pct}%` } as CSSProperties}
                   >
                     {b.time}
                   </span>
@@ -361,7 +361,7 @@ export function TimelineBar({
                       key={`fl-${seg.index}`}
                       className="t-seg"
                       style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, background: airlineColor(fl.airline) }}
-                      title={`${fl.from}→${fl.to}  ${fl.dep}–${fl.arr}  ${fmtDur(fl.dur)}`}
+                      title={`${fl.from}→${fl.to}  ${fl.dep}–${fl.arr}  ${fmtDur(fl.dur)}  ·  ${fl.airline} ${fl.fn}`}
                     >
                       {showFlightDuration && (
                         <span className="t-span-label t-span-label--flight t-span-label--in-seg">

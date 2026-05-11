@@ -30,6 +30,7 @@ export function StopsFilterBar({ label, min, max, value, onChange, tripValue, hi
             <button
               key={n}
               type="button"
+              aria-pressed={isSelected}
               className={
                 "stops-option-btn" +
                 (isSelected ? " stops-option-btn--active" : "") +
