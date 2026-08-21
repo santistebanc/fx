@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type TouchEve
 import { Routes, Route, useNavigate, useSearchParams } from "react-router-dom"
 import { SearchChrome } from "./components/SearchChrome"
 import type { Filters } from "./components/Sidebar"
-import { StatSlider } from "./components/StatSlider"
+import type { NiceBreakStep } from "./components/NaturalBreaksFilterBar"
+import { NaturalBreaksFilterBar } from "./components/NaturalBreaksFilterBar"
 import { StopsFilterBar } from "./components/StopsFilterBar"
 import { TimelineBar } from "./components/TimelineBar"
 import { BookModal } from "./components/BookModal"
@@ -13,6 +14,8 @@ const apiOrigin = (import.meta.env.VITE_API_ORIGIN ?? "").replace(/\/$/, "")
 const apiUrl = (path: string) => `${apiOrigin}${path}`
 
 const CLIENT_CACHE_TTL = 60 * 60 * 1000 // 1 hour, matches server
+const PRICE_NICE_BREAK_STEPS: NiceBreakStep[] = [1000, 500, 100, 50, 25, 10, 5].map(step => ({ step, mode: "ceil" }))
+const TIME_NICE_BREAK_STEPS: NiceBreakStep[] = [10 * 60, 5 * 60, 60, 30, 15, 10, 5].map(step => ({ step, mode: "ceil" }))
 
 function searchCacheKey(origin: string, destination: string, dep: string, ret: string): string {
   return `flyscan.search|${origin}|${destination}|${dep}|${ret}`
@@ -73,24 +76,51 @@ type TimeFilters = {
 
 type AirlineColorMap = Record<string, string>
 
+function tripPassesTimeFilters(t: UiTrip, time?: TimeFilters): boolean {
+  if (!time) return true
+  const outFlights = t.outbound.flights
+  if (time.outDepAfter != null && outFlights[0] && outFlights[0].depAt < time.outDepAfter) return false
+  if (time.outArrBefore != null && outFlights.length > 0 && outFlights[outFlights.length - 1]!.arrAt > time.outArrBefore) return false
+  if (t.inbound) {
+    const inFlights = t.inbound.flights
+    if (time.inDepAfter != null && inFlights[0] && inFlights[0].depAt < time.inDepAfter) return false
+    if (time.inArrBefore != null && inFlights.length > 0 && inFlights[inFlights.length - 1]!.arrAt > time.inArrBefore) return false
+  }
+  return true
+}
+
 function filterTrips(trips: UiTrip[], filters: Filters, time?: TimeFilters): UiTrip[] {
   return trips.filter(t => {
     if (t.price > filters.price) return false
     if (t.stats.duration > filters.duration) return false
     if (t.stats.stops > filters.stops) return false
     if (t.stats.layover > filters.layover) return false
-    if (time) {
-      const outFlights = t.outbound.flights
-      if (time.outDepAfter != null && outFlights[0] && outFlights[0].depAt < time.outDepAfter) return false
-      if (time.outArrBefore != null && outFlights.length > 0 && outFlights[outFlights.length - 1]!.arrAt > time.outArrBefore) return false
-      if (t.inbound) {
-        const inFlights = t.inbound.flights
-        if (time.inDepAfter != null && inFlights[0] && inFlights[0].depAt < time.inDepAfter) return false
-        if (time.inArrBefore != null && inFlights.length > 0 && inFlights[inFlights.length - 1]!.arrAt > time.inArrBefore) return false
-      }
-    }
-    return true
+    return tripPassesTimeFilters(t, time)
   })
+}
+
+function maxValueIfOnlyFilterChanges(
+  trips: UiTrip[],
+  filters: Filters,
+  except: keyof Filters,
+  time: TimeFilters,
+  pick: (trip: UiTrip) => number,
+): { min: number; max: number; hasCurrentResults: boolean } | null {
+  const candidates = trips.filter(t => {
+    if (except !== "price" && t.price > filters.price) return false
+    if (except !== "duration" && t.stats.duration > filters.duration) return false
+    if (except !== "stops" && t.stats.stops > filters.stops) return false
+    if (except !== "layover" && t.stats.layover > filters.layover) return false
+    return tripPassesTimeFilters(t, time)
+  })
+  const current = filters[except]
+  if (candidates.length === 0) return null
+  const values = candidates.map(pick)
+  return {
+    min: Math.min(...values),
+    max: Math.max(...values),
+    hasCurrentResults: candidates.some(t => pick(t) <= current),
+  }
 }
 
 function getTimelineRange(
@@ -287,6 +317,41 @@ function SearchPage() {
   const sliderMaxLay   = cutoffActive && cutoff ? cutoff.layover  : absMaxLay
   const sliderMaxStops = cutoffActive && cutoff ? cutoff.stops    : absMaxStops
   const sliderMaxPrice = cutoffActive && cutoff ? cutoff.price    : absMaxPrice
+
+  const filterDomainTrips = cutoffActive && cutoff ? filterTrips(allTrips, cutoff) : allTrips
+  const durationFilterValues = filterDomainTrips.map(t => t.stats.duration)
+  const layoverFilterValues = filterDomainTrips.map(t => t.stats.layover)
+  const priceFilterValues = filterDomainTrips.map(t => t.price)
+  const durationNoAdditionUntil = maxValueIfOnlyFilterChanges(
+    filterDomainTrips,
+    filters,
+    "duration",
+    timeFilters,
+    t => t.stats.duration,
+  )
+  const layoverNoAdditionUntil = maxValueIfOnlyFilterChanges(
+    filterDomainTrips,
+    filters,
+    "layover",
+    timeFilters,
+    t => t.stats.layover,
+  )
+  const priceNoAdditionUntil = maxValueIfOnlyFilterChanges(
+    filterDomainTrips,
+    filters,
+    "price",
+    timeFilters,
+    t => t.price,
+  )
+  const durationNoAdditionEnd = durationNoAdditionUntil?.max ?? null
+  const layoverNoAdditionEnd = layoverNoAdditionUntil?.max ?? null
+  const priceNoAdditionEnd = priceNoAdditionUntil?.max ?? null
+  const durationNoAdditionStart = durationNoAdditionUntil?.min ?? null
+  const layoverNoAdditionStart = layoverNoAdditionUntil?.min ?? null
+  const priceNoAdditionStart = priceNoAdditionUntil?.min ?? null
+  const durationHasCurrentResults = durationNoAdditionUntil?.hasCurrentResults ?? false
+  const layoverHasCurrentResults = layoverNoAdditionUntil?.hasCurrentResults ?? false
+  const priceHasCurrentResults = priceNoAdditionUntil?.hasCurrentResults ?? false
 
   const priceStep = Math.max(1, Math.round((absMaxPrice - absMinPrice) / 100))
 
@@ -734,12 +799,17 @@ function SearchPage() {
                             {noMatch ? "—" : fmtDur(trip.stats.duration)}
                           </span>
                         </div>
-                        <StatSlider
+                        <NaturalBreaksFilterBar
                           label="Duration" hideLabel
                           value={filters.duration} min={absMinDur} max={sliderMaxDur} step={30}
-                          format={fmtDurFull}
+                          values={durationFilterValues}
+                          niceBreakSteps={TIME_NICE_BREAK_STEPS}
+                          format={fmtDur}
                           onChange={v => setFilter("duration", v)}
                           tripValue={noMatch ? null : trip.stats.duration}
+                          noAdditionFrom={durationNoAdditionStart}
+                          noAdditionUntil={durationNoAdditionEnd}
+                          hasCurrentResults={durationHasCurrentResults}
                         />
                       </div>
                       <div className="trip-stat-stack">
@@ -749,14 +819,41 @@ function SearchPage() {
                             {noMatch ? "—" : fmtDur(trip.stats.layover)}
                           </span>
                         </div>
-                        <StatSlider
+                        <NaturalBreaksFilterBar
                           label="Layover" hideLabel
                           value={filters.layover} min={absMinLay} max={sliderMaxLay} step={15}
-                          format={fmtDurFull}
+                          values={layoverFilterValues}
+                          niceBreakSteps={TIME_NICE_BREAK_STEPS}
+                          format={fmtDur}
                           onChange={v => setFilter("layover", v)}
                           tripValue={noMatch ? null : trip.stats.layover}
+                          noAdditionFrom={layoverNoAdditionStart}
+                          noAdditionUntil={layoverNoAdditionEnd}
+                          hasCurrentResults={layoverHasCurrentResults}
                         />
                       </div>
+                    </div>
+                    <div className="price-hero-stack">
+                      <div className="price-hero-header">
+                        <div className={`price-hero-row${noMatch ? " no-match-dim" : ""}`}>
+                          <span className="stat-name">Price</span>
+                          <div key={noMatch ? "—" : trip.price} className="price-hero anim-in">
+                            {noMatch ? "—" : fmtPrice(trip.price, trip.currency)}
+                          </div>
+                        </div>
+                      </div>
+                      <NaturalBreaksFilterBar
+                        label="Price" hideLabel
+                        value={filters.price} min={absMinPrice} max={sliderMaxPrice} step={priceStep}
+                        values={priceFilterValues}
+                        niceBreakSteps={PRICE_NICE_BREAK_STEPS}
+                        format={v => fmtPrice(v, trip.currency)}
+                        onChange={v => setFilter("price", v)}
+                        tripValue={noMatch ? null : trip.price}
+                        noAdditionFrom={priceNoAdditionStart}
+                        noAdditionUntil={priceNoAdditionEnd}
+                        hasCurrentResults={priceHasCurrentResults}
+                      />
                       {absMinStops < sliderMaxStops && (
                         <div className="trip-stat-stack trip-stat-stack--stops">
                           <div className="trip-stat-hero-row">
@@ -770,36 +867,6 @@ function SearchPage() {
                           />
                         </div>
                       )}
-                    </div>
-                    <div className="price-hero-stack">
-                      <div className="price-hero-header">
-                        {absMinStops < sliderMaxStops && (
-                          <div className="trip-stat-stack trip-stat-stack--stops-mobile">
-                            <div className="trip-stat-hero-row">
-                              <span className="stat-name">Stops</span>
-                            </div>
-                            <StopsFilterBar
-                              label="Stops" hideLabel
-                              value={filters.stops} min={absMinStops} max={sliderMaxStops}
-                              onChange={v => setFilter("stops", v)}
-                              tripValue={noMatch ? null : trip.stats.stops}
-                            />
-                          </div>
-                        )}
-                        <div className={`price-hero-row${noMatch ? " no-match-dim" : ""}`}>
-                          <span className="stat-name">Price</span>
-                          <div key={noMatch ? "—" : trip.price} className="price-hero anim-in">
-                            {noMatch ? "—" : fmtPrice(trip.price, trip.currency)}
-                          </div>
-                        </div>
-                      </div>
-                      <StatSlider
-                        label="Price" hideLabel
-                        value={filters.price} min={absMinPrice} max={sliderMaxPrice} step={priceStep}
-                        format={v => fmtPrice(v, trip.currency)}
-                        onChange={v => setFilter("price", v)}
-                        tripValue={noMatch ? null : trip.price}
-                      />
                     </div>
                   </div>
 

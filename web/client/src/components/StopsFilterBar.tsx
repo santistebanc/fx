@@ -9,7 +9,7 @@ type StopsFilterBarProps = {
   hideLabel?: boolean
 }
 
-export function StopsFilterBar({ label, min, max, value, onChange, tripValue, hideLabel }: StopsFilterBarProps) {
+export function StopsFilterBar({ label, min, max, value, onChange, hideLabel }: StopsFilterBarProps) {
   const options: number[] = []
   for (let n = min; n <= max; n++) options.push(n)
 
@@ -22,23 +22,25 @@ export function StopsFilterBar({ label, min, max, value, onChange, tripValue, hi
           <span className="stat-name">{label}</span>
         </div>
       )}
-      <div className="stops-option-bar" role="group" aria-label={label}>
+      <div className="stops-option-bar natural-breaks-option-bar" role="group" aria-label={label}>
+        <span className="filter-threshold-label" aria-hidden="true">max</span>
         {options.map((n) => {
+          const isFilled = active >= n
           const isSelected = active === n
-          const isTrip = tripValue != null && tripValue === n
           return (
             <button
               key={n}
               type="button"
               aria-pressed={isSelected}
               className={
-                "stops-option-btn" +
-                (isSelected ? " stops-option-btn--active" : "") +
-                (isTrip ? " stops-option-btn--trip" : "")
+                "stops-option-btn natural-breaks-option-btn" +
+                (isFilled ? " stops-option-btn--filled" : "") +
+                (isSelected ? " stops-option-btn--active" : "")
               }
               onClick={() => onChange(n)}
             >
-              {n}
+              <span className="stops-option-btn__sizer">{n}</span>
+              <span className="stops-option-btn__label">{n}</span>
             </button>
           )
         })}
